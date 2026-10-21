@@ -250,13 +250,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshStats() {
         viewModelScope.launch {
-            val calendar = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            _todayStudySeconds.value = repository.getTotalStudySecondsSince(calendar.timeInMillis)
             _todayPhoneMillis.value = usageRepository.getTodayTotalScreenTimeMillis()
         }
     }
