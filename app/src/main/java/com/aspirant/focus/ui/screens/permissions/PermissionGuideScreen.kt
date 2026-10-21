@@ -1,13 +1,5 @@
 package com.aspirant.focus.ui.screens.permissions
 
-import android.app.AppOpsManager
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.os.PowerManager
-import android.os.Process
-import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -23,24 +15,40 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.aspirant.focus.ui.theme.*
+import com.aspirant.focus.util.PermissionHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PermissionGuideScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    var hasAccessibility by remember { mutableStateOf(checkAccessibility(context)) }
-    var hasOverlay by remember { mutableStateOf(checkOverlay(context)) }
-    var hasUsage by remember { mutableStateOf(checkUsage(context)) }
-    var hasBattery by remember { mutableStateOf(checkBattery(context)) }
+    var hasAccessibility by remember { mutableStateOf(PermissionHelper.isAccessibilityEnabled(context)) }
+    var hasOverlay by remember { mutableStateOf(PermissionHelper.isOverlayGranted(context)) }
+    var hasUsage by remember { mutableStateOf(PermissionHelper.isUsageGranted(context)) }
+    var hasBattery by remember { mutableStateOf(PermissionHelper.isBatteryOptimizationIgnored(context)) }
 
-    // Recheck on resume
-    DisposableEffect(Unit) {
-        onDispose { }
+    // Recheck permissions whenever user returns from Android Settings
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasAccessibility = PermissionHelper.isAccessibilityEnabled(context)
+                hasOverlay = PermissionHelper.isOverlayGranted(context)
+                hasUsage = PermissionHelper.isUsageGranted(context)
+                hasBattery = PermissionHelper.isBatteryOptimizationIgnored(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     Scaffold(
@@ -65,21 +73,63 @@ fun PermissionGuideScreen(onBack: () -> Unit) {
                 .padding(20.dp)
         ) {
             Text(
-                text = "To block Instagram Reels, YouTube Shorts, and enforce Strict Mode, Aspirant Focus needs the following system permissions:",
+                text = "Aspirant Focus requires the following Android permissions to intercept feeds, block adult websites, and enforce strict study curfews:",
                 fontSize = 13.sp,
                 color = TextSecondary,
                 lineHeight = 18.sp
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // 1. Accessibility Service
+            // Android 13/14/15 Restricted Settings Help Card
+            if (!hasAccessibility) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = WarningAmber.copy(alpha = 0.12f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("⚠️", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Android 13 / 14 / 15 'Restricted Setting' Fix",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = WarningAmber
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "If Android greys out the switch saying 'Restricted setting: currently unavailable':\n\n" +
+                                    "1. Tap 'Open App Info' below.\n" +
+                                    "2. Tap the 3 dots (⋮) in the top-right corner.\n" +
+                                    "3. Tap 'Allow restricted settings' & enter PIN.\n" +
+                                    "4. Return here and tap 'Enable in Settings'.",
+                            fontSize = 12.sp,
+                            color = TextPrimary,
+                            lineHeight = 17.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { PermissionHelper.openAppDetailsSettings(context) },
+                            colors = ButtonDefaults.buttonColors(containerColor = WarningAmber),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Open App Info (Allow Restricted Settings)", color = BackgroundDark, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // 1. Accessibility Service (Primary Blocker Engine)
             PermissionCard(
-                title = "1. Accessibility Service",
-                description = "Crucial for detecting and blocking Reels, Shorts, and stopping bypass attempts.",
+                title = "1. Accessibility Service (Core Engine)",
+                description = "Required to detect and block Instagram, YouTube Shorts, adult sites, and enforce curfew lockdowns.",
                 isGranted = hasAccessibility,
                 onGrantClick = {
-                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    PermissionHelper.openAccessibilitySettings(context)
                 }
             )
 
@@ -87,18 +137,11 @@ fun PermissionGuideScreen(onBack: () -> Unit) {
 
             // 2. Display Over Other Apps
             PermissionCard(
-                title = "2. Display Over Other Apps",
-                description = "Enables the mindful pause & block screen overlay over distracting apps.",
+                title = "2. Display Over Other Apps (Overlay)",
+                description = "Required to show the full-screen intervention lock screen over distracting or adult content.",
                 isGranted = hasOverlay,
                 onGrantClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        context.startActivity(
-                            Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:${context.packageName}")
-                            )
-                        )
-                    }
+                    PermissionHelper.openOverlaySettings(context)
                 }
             )
 
@@ -107,10 +150,10 @@ fun PermissionGuideScreen(onBack: () -> Unit) {
             // 3. Usage Access
             PermissionCard(
                 title = "3. Usage Access",
-                description = "Enables accurate daily screen time and distraction breakdown reports.",
+                description = "Enables accurate daily screen time tracking and sinkhole reports.",
                 isGranted = hasUsage,
                 onGrantClick = {
-                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                    PermissionHelper.openUsageSettings(context)
                 }
             )
 
@@ -122,12 +165,7 @@ fun PermissionGuideScreen(onBack: () -> Unit) {
                 description = "Prevents Android from killing your focus timer in the background.",
                 isGranted = hasBattery,
                 onGrantClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                            data = Uri.parse("package:${context.packageName}")
-                        }
-                        context.startActivity(intent)
-                    }
+                    PermissionHelper.openBatterySettings(context)
                 }
             )
         }
@@ -171,38 +209,20 @@ fun PermissionCard(
                 ) {
                     Text("Enable in Settings", fontSize = 13.sp)
                 }
+            } else {
+                Surface(
+                    color = PrimaryEmerald.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "✓ Active & Protected",
+                        color = PrimaryEmerald,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
     }
-}
-
-private fun checkAccessibility(context: Context): Boolean {
-    val enabledServices = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-    ) ?: return false
-    return enabledServices.contains(context.packageName)
-}
-
-private fun checkOverlay(context: Context): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        Settings.canDrawOverlays(context)
-    } else true
-}
-
-private fun checkUsage(context: Context): Boolean {
-    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-    val mode = appOps.checkOpNoThrow(
-        AppOpsManager.OPSTR_GET_USAGE_STATS,
-        Process.myUid(),
-        context.packageName
-    )
-    return mode == AppOpsManager.MODE_ALLOWED
-}
-
-private fun checkBattery(context: Context): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-        pm.isIgnoringBatteryOptimizations(context.packageName)
-    } else true
 }

@@ -10,7 +10,9 @@ import com.aspirant.focus.AspirantApplication
 import com.aspirant.focus.MainActivity
 import com.aspirant.focus.overlay.InterventionOverlayManager
 import com.aspirant.focus.service.FocusSessionService
+import com.aspirant.focus.util.ActiveBlockNotice
 import kotlinx.coroutines.*
+import java.util.Locale
 
 class AspirantAccessibilityService : AccessibilityService() {
 
@@ -23,20 +25,17 @@ class AspirantAccessibilityService : AccessibilityService() {
     private var whitelistedAppPackages = setOf<String>()
     private val approvedIntentionPackages = mutableMapOf<String, Long>()
 
-    private fun isCurfewActive(): Boolean {
+    fun isCurfewActive(): Boolean {
         if (!prefs.isCurfewEnabled) return false
-        val calendar = java.util.Calendar.getInstance()
-        val currentHour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
-        val currentMinute = calendar.get(java.util.Calendar.MINUTE)
-        val currentTotalMin = currentHour * 60 + currentMinute
+        val cal = java.util.Calendar.getInstance()
+        val curMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+        val startMin = prefs.curfewStartHour * 60 + prefs.curfewStartMinute
+        val endMin = prefs.curfewEndHour * 60 + prefs.curfewEndMinute
 
-        val startTotalMin = prefs.curfewStartHour * 60 + prefs.curfewStartMinute
-        val endTotalMin = prefs.curfewEndHour * 60 + prefs.curfewEndMinute
-
-        return if (startTotalMin > endTotalMin) {
-            currentTotalMin >= startTotalMin || currentTotalMin < endTotalMin
+        return if (startMin > endMin) {
+            curMin >= startMin || curMin < endMin
         } else {
-            currentTotalMin in startTotalMin until endTotalMin
+            curMin in startMin until endMin
         }
     }
 
@@ -44,7 +43,6 @@ class AspirantAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         overlayManager = InterventionOverlayManager(this)
 
-        // Observe custom blocked apps and whitelisted study apps from database
         val db = AspirantApplication.instance.database
         serviceScope.launch {
             db.focusDao().getAllAppRules().collect { rules ->
@@ -63,16 +61,24 @@ class AspirantAccessibilityService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
 
         // 0. Curfew Guard (Bedtime & Morning Lock)
+        // Hard-locks all social media, entertainment, distracting apps, and user-blocked apps
         if (isCurfewActive() &&
             packageName != applicationContext.packageName &&
-            (blockedAppPackages.contains(packageName) || packageName == PKG_INSTAGRAM || packageName == PKG_YOUTUBE)
+            packageName != "com.android.systemui" &&
+            (DEFAULT_DISTRACTING_PACKAGES.contains(packageName) ||
+             blockedAppPackages.contains(packageName) ||
+             packageName == PKG_INSTAGRAM ||
+             packageName == PKG_INSTAGRAM_LITE ||
+             packageName == PKG_YOUTUBE)
         ) {
-            val curfewEndTime = String.format("%02d:%02d", prefs.curfewEndHour, prefs.curfewEndMinute)
-            throttleIntervention(
-                "🌙 Curfew Active",
-                "Sleep & morning momentum protected. Distracting apps are locked until $curfewEndTime."
-            )
+            val curfewEndTime = String.format(Locale.getDefault(), "%02d:%02d", prefs.curfewEndHour, prefs.curfewEndMinute)
+            val title = "🌙 Bedtime Curfew Active"
+            val msg = "Sleep & morning momentum protected. Distracting apps are locked until $curfewEndTime."
+
+            ActiveBlockNotice.show(title, msg, "CURFEW")
+            reForegroundAspirantFocus("CURFEW")
             performGlobalAction(GLOBAL_ACTION_HOME)
+            throttleIntervention(title, msg, isStrict = true)
             return
         }
 
@@ -81,22 +87,16 @@ class AspirantAccessibilityService : AccessibilityService() {
         if (prefs.isStrictModeActive && prefs.isKioskLockEnabled && !isEmergencyAccess) {
             val isAspirantApp = packageName == applicationContext.packageName
             val isSystemUi = packageName == "com.android.systemui"
-            val isWhitelistedTool = prefs.isStudyToolsWhitelisted && (WHITELISTED_STUDY_TOOLS.contains(packageName) || whitelistedAppPackages.contains(packageName))
+            val isWhitelistedTool = prefs.isStudyToolsWhitelisted &&
+                    (WHITELISTED_STUDY_TOOLS.contains(packageName) || whitelistedAppPackages.contains(packageName))
 
             if (!isAspirantApp && !isSystemUi && !isWhitelistedTool) {
-                try {
-                    val intent = Intent(this, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                    }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    performGlobalAction(GLOBAL_ACTION_HOME)
-                }
-                throttleIntervention(
-                    "🔒 Focus Locked",
-                    "Strict Mode is active. Aspirant Focus is locked to screen until your timer ends or emergency unlock is used.",
-                    isStrict = true
-                )
+                val title = "🔒 Focus Locked"
+                val msg = "Strict Mode is active. Aspirant Focus is pinned until timer ends or Emergency Access is used."
+                ActiveBlockNotice.show(title, msg, "STRICT_KIOSK")
+                reForegroundAspirantFocus("STRICT_KIOSK")
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                throttleIntervention(title, msg, isStrict = true)
                 return
             }
         }
@@ -104,18 +104,21 @@ class AspirantAccessibilityService : AccessibilityService() {
         // 0.2 Dynamic App Blocking (Blocks any app added to the blocker during focus)
         if (FocusSessionService.sessionState.value.isActive &&
             packageName != applicationContext.packageName &&
+            packageName != "com.android.systemui" &&
             blockedAppPackages.contains(packageName)
         ) {
-            throttleIntervention(
-                "App Blocked During Focus!",
-                "You have an active study session for ${FocusSessionService.sessionState.value.subject}. Stay locked in."
-            )
+            val title = "App Blocked During Focus!"
+            val msg = "Active study session for ${FocusSessionService.sessionState.value.subject}. Stay locked in."
+            ActiveBlockNotice.show(title, msg, "APP_BLOCKED")
+            reForegroundAspirantFocus("APP_BLOCKED")
             performGlobalAction(GLOBAL_ACTION_HOME)
+            throttleIntervention(title, msg)
             return
         }
 
         // 0.3 Intention Pause (10s breath gate outside of focus mode)
         if (!FocusSessionService.sessionState.value.isActive &&
+            !isCurfewActive() &&
             prefs.isIntentionPauseEnabled &&
             packageName != applicationContext.packageName &&
             (blockedAppPackages.contains(packageName) || packageName == PKG_INSTAGRAM || packageName == PKG_YOUTUBE)
@@ -126,7 +129,7 @@ class AspirantAccessibilityService : AccessibilityService() {
                 if (now - lastInterventionTime > 3000) {
                     lastInterventionTime = now
                     val appName = when (packageName) {
-                        PKG_INSTAGRAM -> "Instagram"
+                        PKG_INSTAGRAM, PKG_INSTAGRAM_LITE -> "Instagram"
                         PKG_YOUTUBE -> "YouTube"
                         else -> "Distracting App"
                     }
@@ -143,13 +146,13 @@ class AspirantAccessibilityService : AccessibilityService() {
             }
         }
 
-        // 1. Strict Mode Anti-Uninstall Protection Check
+        // 1. Strict Mode Anti-Uninstall & Settings Protection Check
         if (prefs.isStrictModeActive) {
             checkStrictProtection(packageName, event)
         }
 
         // 2. Targeted Instagram Reels Blocker
-        if (prefs.isReelsBlockerEnabled && packageName == PKG_INSTAGRAM) {
+        if (prefs.isReelsBlockerEnabled && (packageName == PKG_INSTAGRAM || packageName == PKG_INSTAGRAM_LITE)) {
             checkInstagramReels(event)
         }
 
@@ -163,14 +166,26 @@ class AspirantAccessibilityService : AccessibilityService() {
             }
         }
 
-        // 4. Website & Adult Content Filtering
-        if (prefs.isWebsiteBlockerEnabled && BROWSER_PACKAGES.contains(packageName)) {
-            checkBrowserUrl(event)
+        // 4. Website & Adult Content Filtering (Across all mobile browsers)
+        if (prefs.isWebsiteBlockerEnabled && isBrowserPackage(packageName)) {
+            checkBrowserSecurityAndContent(packageName)
         }
     }
 
-    override fun onInterrupt() {
-        // Required callback when accessibility is interrupted
+    override fun onInterrupt() {}
+
+    private fun reForegroundAspirantFocus(reason: String) {
+        try {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("BLOCK_REASON", reason)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }
     }
 
     // --- Strict Protection (Anti-Uninstall & Settings Bypass Lock) ---
@@ -181,8 +196,10 @@ class AspirantAccessibilityService : AccessibilityService() {
             if (containsTextIgnoreCase(root, "Aspirant Focus") &&
                 (containsTextIgnoreCase(root, "uninstall") || containsTextIgnoreCase(root, "delete"))
             ) {
-                throttleIntervention("Uninstall Blocked!", "Strict Mode is active. Complete your study session first!", isStrict = true)
+                ActiveBlockNotice.show("Uninstall Blocked!", "Strict Mode is active. Complete your study session first!", "STRICT_PROTECTION")
+                reForegroundAspirantFocus("STRICT_PROTECTION")
                 performGlobalAction(GLOBAL_ACTION_HOME)
+                throttleIntervention("Uninstall Blocked!", "Strict Mode is active. Complete your study session first!", isStrict = true)
                 return
             }
         }
@@ -194,8 +211,10 @@ class AspirantAccessibilityService : AccessibilityService() {
                 containsTextIgnoreCase(root, "Accessibility") ||
                 containsTextIgnoreCase(root, "Force stop")
             ) {
-                throttleIntervention("Settings Locked!", "Settings are locked during Strict Mode focus session.", isStrict = true)
+                ActiveBlockNotice.show("Settings Locked!", "Settings are locked during Strict Mode focus session.", "SETTINGS_LOCKED")
+                reForegroundAspirantFocus("SETTINGS_LOCKED")
                 performGlobalAction(GLOBAL_ACTION_HOME)
+                throttleIntervention("Settings Locked!", "Settings are locked during Strict Mode focus session.", isStrict = true)
                 return
             }
         }
@@ -205,7 +224,6 @@ class AspirantAccessibilityService : AccessibilityService() {
     private fun checkInstagramReels(event: AccessibilityEvent) {
         val root = rootInActiveWindow ?: return
 
-        // Check view IDs and content descriptions for Reels triggers
         val isReelsViewing = containsNodeMatching(root) { node ->
             val id = node.viewIdResourceName?.lowercase() ?: ""
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
@@ -255,7 +273,6 @@ class AspirantAccessibilityService : AccessibilityService() {
     private fun checkYouTubeStudyMode(event: AccessibilityEvent) {
         val root = rootInActiveWindow ?: return
 
-        // If user is idling on the Home recommendations feed, gently steer them
         val isHomeFeed = containsNodeMatching(root) { node ->
             val id = node.viewIdResourceName?.lowercase() ?: ""
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
@@ -270,42 +287,74 @@ class AspirantAccessibilityService : AccessibilityService() {
         }
     }
 
-    // --- Browser URL / Adult Content Filtering ---
-    private fun checkBrowserUrl(event: AccessibilityEvent) {
+    // --- Browser Security & Adult Content Filtering ---
+    private fun checkBrowserSecurityAndContent(packageName: String) {
         val root = rootInActiveWindow ?: return
 
-        val urlBarNode = findUrlNode(root)
-        val url = urlBarNode?.text?.toString()?.lowercase() ?: return
+        // 1. Incognito / Private Browsing Blocker
+        // Blocks opening or using Incognito/Private tabs across Chrome, Samsung Internet, Firefox, Edge, etc.
+        val isIncognito = containsNodeMatching(root) { node ->
+            val text = node.text?.toString()?.lowercase() ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+            val id = node.viewIdResourceName?.lowercase() ?: ""
 
-        val isBlocked = ADULT_AND_DISTRACTING_DOMAINS.any { domain ->
-            url.contains(domain)
+            text.contains("incognito") || desc.contains("incognito") || id.contains("incognito") ||
+            text.contains("secret mode") || desc.contains("secret mode") ||
+            text.contains("private tab") || desc.contains("private tab") ||
+            text.contains("inprivate") || desc.contains("inprivate") ||
+            text.contains("private browsing") || desc.contains("private browsing") ||
+            desc.contains("new incognito tab") || text.contains("close incognito tabs")
         }
 
-        if (isBlocked) {
-            throttleIntervention(
-                "Distracting Site Blocked!",
-                "This website is blocked to protect your study time and mental clarity."
-            )
+        if (isIncognito) {
+            val title = "🔒 Incognito / Private Mode Blocked"
+            val msg = "Private browsing is strictly disabled to prevent adult content loopholes."
+            ActiveBlockNotice.show(title, msg, "INCOGNITO")
+            reForegroundAspirantFocus("INCOGNITO")
+            performGlobalAction(GLOBAL_ACTION_HOME)
             performGlobalAction(GLOBAL_ACTION_BACK)
+            throttleIntervention(title, msg, isStrict = true)
+            return
         }
+
+        // 2. Adult Content & Explicit Keyword Filter (Scans URL bar, search queries, page text)
+        val isAdultContent = containsNodeMatching(root) { node ->
+            val text = node.text?.toString()?.lowercase() ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+            val id = node.viewIdResourceName?.lowercase() ?: ""
+
+            val isUrlBar = id.contains("url") || id.contains("location") || id.contains("address") || id.contains("search") || id.contains("omnibox")
+
+            ADULT_KEYWORDS_AND_DOMAINS.any { keyword ->
+                if (isUrlBar) {
+                    text.contains(keyword) || desc.contains(keyword)
+                } else {
+                    // Check words separated by spaces or punctuation
+                    text.split(" ", "/", ".", "-", "?", "&", "=").any { word ->
+                        word == keyword || (keyword.length >= 4 && word.contains(keyword))
+                    }
+                }
+            }
+        }
+
+        if (isAdultContent) {
+            val title = "🛑 Adult Content Blocked"
+            val msg = "Access to adult, pornographic, or gambling content is strictly blocked on this device."
+            ActiveBlockNotice.show(title, msg, "ADULT_CONTENT")
+            reForegroundAspirantFocus("ADULT_CONTENT")
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            throttleIntervention(title, msg, isStrict = true)
+        }
+    }
+
+    private fun isBrowserPackage(packageName: String): Boolean {
+        if (BROWSER_PACKAGES.contains(packageName)) return true
+        val lower = packageName.lowercase()
+        return lower.contains("browser") || lower.contains("chrome") || lower.contains("firefox") || lower.contains("opera")
     }
 
     // --- Node Helpers ---
-    private fun findUrlNode(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        if (node.className?.contains("EditText", ignoreCase = true) == true) {
-            val text = node.text?.toString() ?: ""
-            if (text.contains(".") || text.startsWith("http")) {
-                return node
-            }
-        }
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val result = findUrlNode(child)
-            if (result != null) return result
-        }
-        return null
-    }
-
     private fun containsNodeMatching(
         node: AccessibilityNodeInfo,
         predicate: (AccessibilityNodeInfo) -> Boolean
@@ -337,7 +386,7 @@ class AspirantAccessibilityService : AccessibilityService() {
 
     private fun throttleIntervention(title: String, msg: String, isStrict: Boolean = false) {
         val now = System.currentTimeMillis()
-        if (now - lastInterventionTime > 2500) {
+        if (now - lastInterventionTime > 1500) {
             lastInterventionTime = now
             overlayManager.showIntervention(title, msg, isStrictLockout = isStrict)
         }
@@ -345,8 +394,31 @@ class AspirantAccessibilityService : AccessibilityService() {
 
     companion object {
         const val PKG_INSTAGRAM = "com.instagram.android"
+        const val PKG_INSTAGRAM_LITE = "com.instagram.lite"
         const val PKG_YOUTUBE = "com.google.android.youtube"
         const val PKG_SETTINGS = "com.android.settings"
+
+        val DEFAULT_DISTRACTING_PACKAGES = setOf(
+            "com.instagram.android",
+            "com.instagram.lite",
+            "com.google.android.youtube",
+            "com.google.android.youtube.tv",
+            "com.snapchat.android",
+            "com.twitter.android",
+            "com.twitter.android.lite",
+            "com.facebook.katana",
+            "com.facebook.lite",
+            "com.facebook.orca",
+            "com.reddit.frontpage",
+            "com.zhiliaoapp.musically",
+            "com.ss.android.ugc.trill",
+            "com.netflix.mediaclient",
+            "com.amazon.avod.thirdpartyclient",
+            "in.startv.hotstar",
+            "tv.twitch.android.app",
+            "com.pinterest",
+            "com.discord"
+        )
 
         val INSTALLER_PACKAGES = setOf(
             "com.google.android.packageinstaller",
@@ -356,23 +428,55 @@ class AspirantAccessibilityService : AccessibilityService() {
 
         val BROWSER_PACKAGES = setOf(
             "com.android.chrome",
+            "com.chrome.beta",
+            "com.chrome.canary",
+            "com.chrome.dev",
             "org.mozilla.firefox",
+            "org.mozilla.firefox_beta",
+            "org.mozilla.focus",
+            "org.mozilla.fenix",
             "com.brave.browser",
             "com.opera.browser",
+            "com.opera.mini.native",
+            "com.opera.touch",
             "com.microsoft.emmx",
-            "com.duckduckgo.mobile.android"
+            "com.duckduckgo.mobile.android",
+            "com.sec.android.app.sbrowser",
+            "com.sec.android.app.sbrowser.beta",
+            "com.mi.globalbrowser",
+            "com.android.browser",
+            "com.vivo.browser",
+            "com.heytap.browser",
+            "com.coloros.browser",
+            "com.UCMobile.intl",
+            "com.uc.browser.en",
+            "com.vivaldi.browser",
+            "com.kiwibrowser.browser",
+            "org.torproject.torbrowser"
         )
 
-        val ADULT_AND_DISTRACTING_DOMAINS = listOf(
-            "instagram.com/reels",
-            "m.youtube.com/shorts",
-            "tiktok.com",
-            "pornhub",
-            "xvideos",
-            "xnxx",
-            "redtube",
-            "bet365",
-            "stake.com"
+        val ADULT_KEYWORDS_AND_DOMAINS = listOf(
+            // Top Adult Sites & Tubes
+            "pornhub", "xvideos", "xnxx", "xhamster", "redtube", "youporn", "brazzers",
+            "spankbang", "chaturbate", "stripchat", "onlyfans", "erome", "hentai",
+            "beeg", "eporner", "tnaflix", "tube8", "drtuber", "nuvid", "pornhat",
+            "hqporner", "daftsex", "motherless", "txxx", "rule34", "gelbooru",
+            "danbooru", "e621", "camsoda", "bongacams", "myfreecams", "livejasmin",
+            "manyvids", "fansly", "adultfriendfinder", "cam4", "camwhores",
+            "fapello", "faphero", "coomer", "kemono", "javhd", "javlibrary",
+            "missav", "jable", "avgle", "spankwire", "heavy-r", "kaotic",
+
+            // Explicit Adult Keywords
+            "porn", "xxx", "nude", "nudes", "naked", "nsfw", "erotic",
+            "fetish", "camgirl", "camgirls", "escort", "escorts",
+            "boobs", "pussy", "milf", "anal", "blowjob", "creampie",
+            "hardcore", "softcore", "playboy", "penthouse", "fap",
+            "masturbat", "orgasm", "dildo", "vibrator", "bdsm",
+            "gangbang", "threesome", "shemale", "ladyboy", "incest",
+
+            // Gambling & Betting
+            "bet365", "1xbet", "stake.com", "parimatch", "betway", "dafabet",
+            "melbet", "22bet", "lottery", "casino", "roulette", "blackjack"
         )
 
         val WHITELISTED_STUDY_TOOLS = setOf(

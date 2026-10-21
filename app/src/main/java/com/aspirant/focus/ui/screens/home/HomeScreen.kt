@@ -27,14 +27,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aspirant.focus.data.model.FocusAudioType
 import com.aspirant.focus.data.model.MCQBank
 import com.aspirant.focus.ui.theme.*
+import com.aspirant.focus.util.PermissionHelper
 
 @Composable
 fun HomeScreen(
@@ -67,6 +71,21 @@ fun HomeScreen(
     var showEmergencyMinimizeDialog by remember { mutableStateOf(false) }
     var mcqIndex by remember { mutableStateOf(0) }
     var mcqCorrectCount by remember { mutableStateOf(0) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isAccessibilityEnabled by remember { mutableStateOf(PermissionHelper.isAccessibilityEnabled(context)) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isAccessibilityEnabled = PermissionHelper.isAccessibilityEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     val durations = listOf(15, 25, 45, 60, 90, 120)
 
@@ -103,6 +122,48 @@ fun HomeScreen(
         }
 
         Spacer(modifier = Modifier.height(14.dp))
+
+        // Critical Blocker Engine Inactive Warning Card
+        if (!isAccessibilityEnabled) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToPermissions() },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = DangerRed.copy(alpha = 0.15f)),
+                border = BorderStroke(1.5.dp, DangerRed)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("⚠️", fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Blocker Engine Disabled!",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DangerRed
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Accessibility Service is OFF. Aspirant Focus cannot block apps, feeds, or adult websites until this permission is granted in Android Settings.",
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = onNavigateToPermissions,
+                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Activate Blocker Service Now", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
 
         // Selected Exam Tag with D-Day Countdown & Progress
         selectedExam?.let { exam ->
