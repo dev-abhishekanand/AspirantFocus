@@ -171,9 +171,32 @@ class AspirantAccessibilityService : AccessibilityService() {
             checkBrowserSecurityAndContent(packageName)
         }
 
-        // 5. Telegram Adult Channel & Content Filtering
+        // 5. Telegram Adult Channel & Content Filtering (Leaves legitimate study channels fully accessible)
         if (prefs.isWebsiteBlockerEnabled && isTelegramPackage(packageName)) {
             checkTelegramAdultContent()
+        }
+
+        // 6. VPN & Proxy Loophole Interceptor (Preserves System-Wide DNS Filter)
+        if (prefs.isWebsiteBlockerEnabled && isVpnPackage(packageName)) {
+            val title = "🛡️ VPN Bypass Blocked"
+            val msg = "VPN and proxy apps are disabled to ensure unbreakable DNS adult filtering."
+            ActiveBlockNotice.show(title, msg, "VPN_BLOCKED")
+            reForegroundAspirantFocus("VPN_BLOCKED")
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            throttleIntervention(title, msg, isStrict = true)
+            return
+        }
+
+        // 7. Google Play Store Search Gatekeeper (Blocks searching for alternative browsers, VPNs, or explicit keywords)
+        if (prefs.isWebsiteBlockerEnabled && packageName == PKG_PLAY_STORE) {
+            checkPlayStoreSecurity()
+        }
+
+        // 8. In-App Webview Guardian (Scans Custom Tabs and embedded webviews in 3rd party apps)
+        if (prefs.isWebsiteBlockerEnabled && !isBrowserPackage(packageName) && !isTelegramPackage(packageName) &&
+            packageName != applicationContext.packageName && packageName != "com.android.systemui") {
+            checkInAppWebviewSecurity()
         }
     }
 
@@ -415,6 +438,84 @@ class AspirantAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun isVpnPackage(packageName: String): Boolean {
+        if (VPN_PACKAGES.contains(packageName)) return true
+        val lower = packageName.lowercase()
+        return (lower.contains("vpn") || lower.contains("proxy") || lower.contains("wireguard") || lower.contains("openvpn")) &&
+                !lower.contains("aspirant")
+    }
+
+    private fun checkPlayStoreSecurity() {
+        val root = rootInActiveWindow ?: return
+
+        val isProhibitedSearch = containsNodeMatching(root) { node ->
+            val text = node.text?.toString()?.lowercase() ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+
+            // Searches for bypass tools or private browsers
+            PLAY_STORE_RESTRICTED_KEYWORDS.any { keyword ->
+                text.contains(keyword) || desc.contains(keyword)
+            } ||
+            // Or searching explicit adult queries in Play Store
+            UNAMBIGUOUS_ADULT_KEYWORDS.any { keyword ->
+                text.contains(keyword) || desc.contains(keyword)
+            }
+        }
+
+        if (isProhibitedSearch) {
+            val title = "🛑 Play Store Search Blocked"
+            val msg = "Searching for VPNs, alternative private browsers, or explicit terms is blocked."
+            ActiveBlockNotice.show(title, msg, "PLAY_STORE_RESTRICTED")
+            reForegroundAspirantFocus("PLAY_STORE_RESTRICTED")
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            throttleIntervention(title, msg, isStrict = true)
+        }
+    }
+
+    private fun checkInAppWebviewSecurity() {
+        val root = rootInActiveWindow ?: return
+
+        // Check if current screen contains a webview or custom tab
+        val hasWebview = containsNodeMatching(root) { node ->
+            val className = node.className?.toString() ?: ""
+            val id = node.viewIdResourceName?.lowercase() ?: ""
+            className.contains("WebView", ignoreCase = true) ||
+            id.contains("custom_tab") ||
+            id.contains("url_bar") ||
+            id.contains("location_bar")
+        }
+
+        if (!hasWebview) return
+
+        // If a webview is present, scan for adult content / explicit domains
+        val isAdultDetected = containsNodeMatching(root) { node ->
+            val text = node.text?.toString()?.lowercase() ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+
+            UNAMBIGUOUS_ADULT_KEYWORDS.any { keyword ->
+                text.contains(keyword) || desc.contains(keyword)
+            } ||
+            DELIMITED_ADULT_KEYWORDS.any { keyword ->
+                text.split(" ", "/", ".", "-", "?", "&", "=", "_", "@", "+", ":", ";", "#", ",", "(", ")").any { word ->
+                    word == keyword
+                } || desc.split(" ", "/", ".", "-", "?", "&", "=", "_", "@", "+", ":", ";", "#", ",", "(", ")").any { word ->
+                    word == keyword
+                }
+            }
+        }
+
+        if (isAdultDetected) {
+            val title = "🛑 Adult Webview Blocked"
+            val msg = "Adult content loaded inside this application has been strictly blocked."
+            ActiveBlockNotice.show(title, msg, "ADULT_CONTENT")
+            reForegroundAspirantFocus("ADULT_CONTENT")
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            throttleIntervention(title, msg, isStrict = true)
+        }
+    }
+
     // --- Node Helpers ---
     private fun containsNodeMatching(
         node: AccessibilityNodeInfo,
@@ -500,10 +601,45 @@ class AspirantAccessibilityService : AccessibilityService() {
             "org.forkclient.messenger"
         )
 
+        const val PKG_PLAY_STORE = "com.android.vending"
+
         val INSTALLER_PACKAGES = setOf(
             "com.google.android.packageinstaller",
             "com.android.packageinstaller",
             "com.samsung.android.packageinstaller"
+        )
+
+        val VPN_PACKAGES = setOf(
+            "com.cloudflare.onedotonedotonedotone",
+            "free.vpn.unblock.proxy.turbovpn",
+            "free.vpn.unblock.proxy.turbovpn.lite",
+            "com.quarkos.turbovpn",
+            "ch.protonvpn.android",
+            "com.nordvpn.android",
+            "com.expressvpn.vpn",
+            "com.surfshark.vpnclient.android",
+            "com.windscribe.vpn",
+            "hotspotshield.android.vpn",
+            "com.fast.free.unblock.secure.vpn",
+            "org.torproject.torbrowser",
+            "org.torproject.android",
+            "com.psiphon3.subscription",
+            "com.psiphon3",
+            "com.tunnelbear.android",
+            "com.cyberghostro.vpn",
+            "com.vpnhub.android",
+            "com.purevpn.android",
+            "com.securevpn.free",
+            "com.freevpn.android",
+            "com.wireguard.android",
+            "de.blinkt.openvpn",
+            "net.openvpn.openvpn"
+        )
+
+        val PLAY_STORE_RESTRICTED_KEYWORDS = listOf(
+            "vpn", "proxy", "tor browser", "private browser", "incognito browser",
+            "secret browser", "hide ip", "turbovpn", "protonvpn", "nordvpn",
+            "supervpn", "psiphon", "orbot", "unblock proxy"
         )
 
         val BROWSER_PACKAGES = setOf(

@@ -230,6 +230,8 @@ fun MainAppNavHost() {
                         "CURFEW" -> "🌙"
                         "ADULT_CONTENT" -> "🛑"
                         "INCOGNITO" -> "🔒"
+                        "VPN_BLOCKED" -> "🛡️"
+                        "PLAY_STORE_RESTRICTED" -> "⛔"
                         else -> "⚠️"
                     }
                     Text(text = emoji, fontSize = 48.sp)
