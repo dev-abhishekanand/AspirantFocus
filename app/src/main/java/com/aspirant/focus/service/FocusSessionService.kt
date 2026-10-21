@@ -133,6 +133,7 @@ class FocusSessionService : Service() {
 
     private fun stopSession(completed: Boolean) {
         timerJob?.cancel()
+        FocusAudioGenerator.instance.stop()
         _sessionState.value = SessionState()
         prefs.isStrictModeActive = false
         prefs.strictSessionEndTimeMillis = 0L

@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -25,24 +26,29 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aspirant.focus.data.model.FocusAudioType
 import com.aspirant.focus.ui.theme.*
 
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
-    onNavigateToPermissions: () -> Unit
+    onNavigateToPermissions: () -> Unit,
+    onNavigateToExams: () -> Unit
 ) {
     val context = LocalContext.current
     val sessionState by viewModel.sessionState.collectAsState()
+    val selectedExam by viewModel.selectedExam.collectAsState()
     val subjects by viewModel.subjects.collectAsState()
     val selectedSubject by viewModel.selectedSubject.collectAsState()
+    val topics by viewModel.topics.collectAsState()
+    val selectedTopic by viewModel.selectedTopic.collectAsState()
     val selectedDuration by viewModel.selectedDurationMinutes.collectAsState()
     val isPomodoro by viewModel.isPomodoro.collectAsState()
     val isStrict by viewModel.isStrict.collectAsState()
+    val selectedAudio by viewModel.selectedAudio.collectAsState()
     val todayStudySec by viewModel.todayStudySeconds.collectAsState()
     val todayPhoneMillis by viewModel.todayPhoneMillis.collectAsState()
 
@@ -80,7 +86,28 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Selected Exam Tag with quick change button
+        selectedExam?.let { exam ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SurfaceDark)
+                    .clickable { onNavigateToExams() }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🎯 TARGET: ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                    Text(exam.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                }
+                Text("Change Exam ▾", fontSize = 11.sp, color = AccentBlue)
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
 
         // Reality Check Card (Phone Time vs Study Time)
         val studyHours = todayStudySec / 3600
@@ -134,7 +161,7 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(30.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Circular Timer Display
         val remainingSec = if (sessionState.isActive) sessionState.remainingSeconds else selectedDuration * 60L
@@ -146,7 +173,7 @@ fun HomeScreen(
 
         Box(
             modifier = Modifier
-                .size(260.dp)
+                .size(250.dp)
                 .clip(CircleShape)
                 .background(SurfaceDark)
                 .border(6.dp, Brush.radialGradient(listOf(SurfaceCard, BackgroundDark)), CircleShape),
@@ -164,15 +191,17 @@ fun HomeScreen(
                 if (sessionState.isActive) {
                     Text(
                         text = if (sessionState.isBreak) "REST BREAK" else sessionState.subject.uppercase(),
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (sessionState.isBreak) AccentBlue else PrimaryEmerald,
-                        letterSpacing = 1.5.sp
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        maxLines = 1
                     )
                 }
                 Text(
                     text = String.format("%02d:%02d", displayMin, displaySec),
-                    fontSize = 54.sp,
+                    fontSize = 50.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
@@ -199,7 +228,7 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(30.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Session Configuration (Shown when IDLE)
         AnimatedVisibility(visible = !sessionState.isActive) {
@@ -207,7 +236,7 @@ fun HomeScreen(
                 // Subject Selector
                 Text(
                     text = "SELECT SUBJECT",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextMuted,
                     modifier = Modifier
@@ -226,7 +255,7 @@ fun HomeScreen(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (isSelected) PrimaryEmerald else SurfaceCard)
                                 .clickable { viewModel.selectSubject(subject.name) }
-                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Text(
                                 text = subject.name,
@@ -238,12 +267,49 @@ fun HomeScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                // Active Topic Selector Chips
+                if (topics.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = "TOPIC YOU'RE STUDYING NOW",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextMuted,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp)
+                    )
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(topics) { topic ->
+                            val isSelected = topic.name == selectedTopic
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) AccentBlue else SurfaceDark)
+                                    .clickable { viewModel.selectTopic(topic.name) }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = topic.name,
+                                    color = if (isSelected) Color.White else TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // Duration Selector
                 Text(
                     text = "DURATION (MINUTES)",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextMuted,
                     modifier = Modifier
@@ -274,7 +340,43 @@ fun HomeScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Focus Audio Sound Selection
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceDark)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.GraphicEq, contentDescription = null, tint = PurpleAesthetic, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("FOCUS AUDIO SOUND", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(FocusAudioType.values()) { audio ->
+                                val isSelected = audio == selectedAudio
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) PurpleAesthetic else SurfaceCard)
+                                        .clickable { viewModel.selectAudio(audio) }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = audio.displayName,
+                                        fontSize = 11.sp,
+                                        color = if (isSelected) Color.White else TextSecondary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Strict Mode & Pomodoro Toggles
                 Card(
@@ -289,8 +391,8 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Strict Mode", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                Text("No early quit. Anti-uninstall locked.", fontSize = 12.sp, color = TextMuted)
+                                Text("Strict Mode", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("No early quit. Anti-uninstall locked.", fontSize = 11.sp, color = TextMuted)
                             }
                             Switch(
                                 checked = isStrict,
@@ -307,8 +409,8 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Pomodoro Cycles", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                Text("Automated 5-minute break after session", fontSize = 12.sp, color = TextMuted)
+                                Text("Pomodoro Cycles", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("Automated 5-minute break after session", fontSize = 11.sp, color = TextMuted)
                             }
                             Switch(
                                 checked = isPomodoro,
@@ -321,7 +423,7 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(30.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Main Action Button
         if (!sessionState.isActive) {
@@ -329,13 +431,13 @@ fun HomeScreen(
                 onClick = { viewModel.startFocusSession() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(54.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Start Focus Session", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("Start Focus Session", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         } else {
             Button(
@@ -351,7 +453,7 @@ fun HomeScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(54.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (sessionState.isStrict) SurfaceCard else DangerRed
@@ -365,7 +467,7 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = if (sessionState.isStrict) "Strict Mode Active (Locked)" else "End Session Early",
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (sessionState.isStrict) DangerRed else Color.White
                 )

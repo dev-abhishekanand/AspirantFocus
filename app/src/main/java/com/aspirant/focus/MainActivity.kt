@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +19,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import com.aspirant.focus.ui.screens.analytics.AnalyticsScreen
 import com.aspirant.focus.ui.screens.blocker.BlockerScreen
+import com.aspirant.focus.ui.screens.exams.ExamsScreen
 import com.aspirant.focus.ui.screens.home.HomeScreen
 import com.aspirant.focus.ui.screens.permissions.PermissionGuideScreen
 import com.aspirant.focus.ui.screens.strict.StrictModeScreen
@@ -37,6 +39,7 @@ class MainActivity : ComponentActivity() {
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Focus : Screen("focus", "Focus", Icons.Default.Timer)
     object Blocker : Screen("blocker", "Blocker", Icons.Default.Block)
+    object Exams : Screen("exams", "Syllabus", Icons.Default.School)
     object Strict : Screen("strict", "Strict", Icons.Default.Lock)
     object Analytics : Screen("analytics", "Analytics", Icons.Default.BarChart)
     object Permissions : Screen("permissions", "Permissions", Icons.Default.Lock)
@@ -51,6 +54,7 @@ fun MainAppNavHost() {
     val bottomNavItems = listOf(
         Screen.Focus,
         Screen.Blocker,
+        Screen.Exams,
         Screen.Strict,
         Screen.Analytics
     )
@@ -101,11 +105,17 @@ fun MainAppNavHost() {
                 HomeScreen(
                     onNavigateToPermissions = {
                         navController.navigate(Screen.Permissions.route)
+                    },
+                    onNavigateToExams = {
+                        navController.navigate(Screen.Exams.route)
                     }
                 )
             }
             composable(Screen.Blocker.route) {
                 BlockerScreen()
+            }
+            composable(Screen.Exams.route) {
+                ExamsScreen()
             }
             composable(Screen.Strict.route) {
                 StrictModeScreen()
