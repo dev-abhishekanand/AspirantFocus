@@ -33,10 +33,24 @@ class FocusRepository(private val focusDao: FocusDao) {
 
     suspend fun addSubject(subject: Subject) = focusDao.insertSubject(subject)
 
-    suspend fun deleteSubject(subject: Subject) = focusDao.deleteSubject(subject)
+    suspend fun deleteSubject(subject: Subject) {
+        focusDao.deleteTopicsForSubject(subject.name)
+        focusDao.deleteSubject(subject)
+    }
+
+    suspend fun deleteExam(examName: String) {
+        focusDao.deleteTopicsForExam(examName)
+        focusDao.deleteSubjectsForExam(examName)
+    }
 
     // Topics
     fun getTopicsForSubject(subjectName: String): Flow<List<Topic>> = focusDao.getTopicsForSubject(subjectName)
+
+    fun getTopicsForSubjectAndExam(subjectName: String, examName: String): Flow<List<Topic>> =
+        focusDao.getTopicsForSubjectAndExam(subjectName, examName)
+
+    fun getTopicsForExam(examName: String): Flow<List<Topic>> =
+        focusDao.getTopicsForExam(examName)
 
     fun getAllTopics(): Flow<List<Topic>> = focusDao.getAllTopics()
 

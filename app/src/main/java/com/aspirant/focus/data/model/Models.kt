@@ -39,6 +39,7 @@ data class Subject(
 data class Topic(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    val examName: String = "",
     val subjectName: String,
     val name: String,
     val isCompleted: Boolean = false
@@ -51,6 +52,7 @@ data class AppBlockRule(
     val appName: String,
     val isBlockedDuringFocus: Boolean = true,
     val blockReelsOnly: Boolean = false,
+    val isWhitelistedForStudy: Boolean = false,
     val dailyLimitMinutes: Int = 0 // 0 means no limit unless in focus
 )
 
@@ -96,5 +98,18 @@ data class MCQQuestion(
     val options: List<String>,
     val correctIndex: Int,
     val subject: String
+)
+
+data class DailyComparison(
+    val dayLabel: String,
+    val studyHours: Float,
+    val screenHours: Float,
+    val isWin: Boolean
+)
+
+data class SubjectStudyStat(
+    val subjectName: String,
+    val totalSeconds: Long,
+    val percentage: Float
 )
 

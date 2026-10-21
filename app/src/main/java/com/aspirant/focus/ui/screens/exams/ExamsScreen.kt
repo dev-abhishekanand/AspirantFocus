@@ -188,7 +188,8 @@ fun ExamsScreen(viewModel: ExamsViewModel = viewModel()) {
                     newTopicName = ""
                 },
                 onToggleTopic = { viewModel.toggleTopicCompleted(it) },
-                onDeleteTopic = { viewModel.deleteTopic(it) }
+                onDeleteTopic = { viewModel.deleteTopic(it) },
+                onDeleteSubject = { viewModel.deleteSubject(subject) }
             )
             Spacer(modifier = Modifier.height(10.dp))
         }
@@ -315,7 +316,8 @@ fun SubjectAccordionCard(
     topics: List<com.aspirant.focus.data.model.Topic>,
     onAddTopicClick: () -> Unit,
     onToggleTopic: (com.aspirant.focus.data.model.Topic) -> Unit,
-    onDeleteTopic: (com.aspirant.focus.data.model.Topic) -> Unit
+    onDeleteTopic: (com.aspirant.focus.data.model.Topic) -> Unit,
+    onDeleteSubject: () -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(true) }
     val completedCount = topics.count { it.isCompleted }
@@ -333,7 +335,7 @@ fun SubjectAccordionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = subject.name,
                         fontSize = 16.sp,
@@ -353,6 +355,12 @@ fun SubjectAccordionCard(
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Add Topic", tint = PrimaryEmerald)
+                    }
+                    IconButton(
+                        onClick = onDeleteSubject,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete Subject", tint = TextMuted, modifier = Modifier.size(16.dp))
                     }
                     Icon(
                         imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,

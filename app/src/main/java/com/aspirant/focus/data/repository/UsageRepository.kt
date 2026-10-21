@@ -96,4 +96,15 @@ class UsageRepository(private val context: Context) {
             .filter { it.isDistraction }
             .sumOf { it.totalTimeInForegroundMillis }
     }
+
+    fun getDailyScreenTimeMillis(startTimeMillis: Long, endTimeMillis: Long): Long {
+        if (!hasUsageStatsPermission() || usageStatsManager == null) return 0L
+        val stats = usageStatsManager.queryUsageStats(
+            UsageStatsManager.INTERVAL_DAILY,
+            startTimeMillis,
+            endTimeMillis
+        ) ?: return 0L
+        return stats.filter { it.totalTimeInForeground > 10_000 }
+            .sumOf { it.totalTimeInForeground }
+    }
 }

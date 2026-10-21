@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +31,8 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel = viewModel()) {
     val sessions by viewModel.sessions.collectAsState()
     val usageStats by viewModel.usageStats.collectAsState()
     val hasPermission by viewModel.hasUsagePermission.collectAsState()
+    val dailyComparisons by viewModel.dailyComparisons.collectAsState()
+    val subjectBreakdown by viewModel.subjectBreakdown.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.loadStats()
@@ -101,6 +104,189 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel = viewModel()) {
                                 color = if (phoneHours >= 6) DangerRed else WarningAmber
                             )
                             Text("Total Phone Screen Time", fontSize = 12.sp, color = TextSecondary)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 7-Day Visual Comparison Graph
+            if (dailyComparisons.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "7-DAY BATTLE GRAPH",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextMuted,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = "Study Time vs Screen Time",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                            }
+                            // Legend
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(PrimaryEmerald, RoundedCornerShape(2.dp))
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Study", fontSize = 10.sp, color = TextSecondary)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(DangerRed, RoundedCornerShape(2.dp))
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Screen", fontSize = 10.sp, color = TextSecondary)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        val maxHour = maxOf(
+                            dailyComparisons.maxOfOrNull { maxOf(it.studyHours, it.screenHours) } ?: 4f,
+                            4f
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            dailyComparisons.forEach { day ->
+                                val studyRatio = (day.studyHours / maxHour).coerceIn(0.04f, 1f)
+                                val screenRatio = (day.screenHours / maxHour).coerceIn(0.04f, 1f)
+
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    if (day.isWin) {
+                                        Text(
+                                            text = "WIN",
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PrimaryEmerald
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    // Dual Bars
+                                    Row(
+                                        modifier = Modifier
+                                            .height(110.dp)
+                                            .fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.Bottom
+                                    ) {
+                                        // Study Bar (Green)
+                                        Box(
+                                            modifier = Modifier
+                                                .width(10.dp)
+                                                .fillMaxHeight(studyRatio)
+                                                .background(PrimaryEmerald, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        // Screen Bar (Red/Amber)
+                                        Box(
+                                            modifier = Modifier
+                                                .width(10.dp)
+                                                .fillMaxHeight(screenRatio)
+                                                .background(
+                                                    if (day.screenHours > 6f) DangerRed else WarningAmber,
+                                                    RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+                                                )
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = day.dayLabel,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (day.dayLabel == "Today") FontWeight.Bold else FontWeight.Normal,
+                                        color = if (day.dayLabel == "Today") AccentBlue else TextSecondary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Subject Breakdown Bars
+            if (subjectBreakdown.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    text = "SUBJECT STUDY DISTRIBUTION",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        subjectBreakdown.forEach { sub ->
+                            val hours = sub.totalSeconds / 3600
+                            val mins = (sub.totalSeconds % 3600) / 60
+                            val timeStr = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+
+                            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = sub.subjectName,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        text = "$timeStr (${String.format(Locale.getDefault(), "%.0f", sub.percentage)}%)",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PrimaryEmerald
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { sub.percentage / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = PrimaryEmerald,
+                                    trackColor = SurfaceDark
+                                )
+                            }
                         }
                     }
                 }

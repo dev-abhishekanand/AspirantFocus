@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
         RevisionItem::class,
         ParkingLotItem::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -146,7 +146,7 @@ abstract class AppDatabase : RoomDatabase() {
             ) {
                 dao.insertSubject(Subject(examName = exam, name = subjectName, colorHex = color))
                 topics.forEach { topicName ->
-                    dao.insertTopic(Topic(subjectName = subjectName, name = topicName))
+                    dao.insertTopic(Topic(examName = exam, subjectName = subjectName, name = topicName))
                 }
             }
         }

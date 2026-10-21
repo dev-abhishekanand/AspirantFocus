@@ -1,7 +1,9 @@
 package com.aspirant.focus.ui.screens.home
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,6 +64,7 @@ fun HomeScreen(
     var showParkingLotDialog by remember { mutableStateOf(false) }
     var parkingInput by remember { mutableStateOf("") }
     var showMcqDialog by remember { mutableStateOf(false) }
+    var showEmergencyMinimizeDialog by remember { mutableStateOf(false) }
     var mcqIndex by remember { mutableStateOf(0) }
     var mcqCorrectCount by remember { mutableStateOf(0) }
 
@@ -620,6 +623,76 @@ fun HomeScreen(
                     fontWeight = FontWeight.Bold,
                     color = if (sessionState.isStrict) WarningAmber else Color.White
                 )
+            }
+
+            if (sessionState.isStrict) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = { showEmergencyMinimizeDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, WarningAmber.copy(alpha = 0.5f)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = WarningAmber
+                    )
+                ) {
+                    Text("⚡ Emergency Minimize (5-Min Phone Access)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+
+    // Emergency Minimize Confirmation Dialog
+    if (showEmergencyMinimizeDialog) {
+        Dialog(onDismissRequest = { showEmergencyMinimizeDialog = false }) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = SurfaceDark)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "⚡ Emergency Phone Access",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = WarningAmber
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Need to make an urgent call or handle an emergency? You will get 5 minutes of unrestricted phone access.\n\nYour study timer continues running. After 5 minutes, Aspirant Focus Kiosk lockout will resume automatically.",
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showEmergencyMinimizeDialog = false }) {
+                            Text("Stay Focused", color = TextMuted)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                viewModel.grantEmergencyAccess(5)
+                                showEmergencyMinimizeDialog = false
+                                Toast.makeText(context, "5 minutes emergency access granted. Study timer continues in notification.", Toast.LENGTH_LONG).show()
+                                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                                    addCategory(Intent.CATEGORY_HOME)
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(homeIntent)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = WarningAmber),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Minimize Now", color = BackgroundDark, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
     }

@@ -18,6 +18,7 @@ class AspirantAccessibilityService : AccessibilityService() {
     private var lastInterventionTime = 0L
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
     private var blockedAppPackages = setOf<String>()
+    private var whitelistedAppPackages = setOf<String>()
     private val approvedIntentionPackages = mutableMapOf<String, Long>()
 
     private fun isCurfewActive(): Boolean {
@@ -41,11 +42,14 @@ class AspirantAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         overlayManager = InterventionOverlayManager(this)
 
-        // Observe custom blocked apps from database
+        // Observe custom blocked apps and whitelisted study apps from database
         val db = AspirantApplication.instance.database
         serviceScope.launch {
             db.focusDao().getAllAppRules().collect { rules ->
                 blockedAppPackages = rules.filter { it.isBlockedDuringFocus && !it.blockReelsOnly }
+                    .map { it.packageName }
+                    .toSet()
+                whitelistedAppPackages = rules.filter { it.isWhitelistedForStudy }
                     .map { it.packageName }
                     .toSet()
             }
@@ -70,7 +74,32 @@ class AspirantAccessibilityService : AccessibilityService() {
             return
         }
 
-        // 0.1 Dynamic App Blocking (Blocks any app added to the blocker during focus)
+        // 0.1 Strict Mode Kiosk Lockout (Cannot minimize app, cannot switch to unauthorized apps)
+        val isEmergencyAccess = System.currentTimeMillis() < prefs.emergencyAccessEndTimeMillis
+        if (prefs.isStrictModeActive && prefs.isKioskLockEnabled && !isEmergencyAccess) {
+            val isAspirantApp = packageName == applicationContext.packageName
+            val isSystemUi = packageName == "com.android.systemui"
+            val isWhitelistedTool = prefs.isStudyToolsWhitelisted && (WHITELISTED_STUDY_TOOLS.contains(packageName) || whitelistedAppPackages.contains(packageName))
+
+            if (!isAspirantApp && !isSystemUi && !isWhitelistedTool) {
+                try {
+                    val intent = Intent(this, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                }
+                throttleIntervention(
+                    "🔒 Focus Locked",
+                    "Strict Mode is active. Aspirant Focus is locked to screen until your timer ends or emergency unlock is used.",
+                    isStrict = true
+                )
+                return
+            }
+        }
+
+        // 0.2 Dynamic App Blocking (Blocks any app added to the blocker during focus)
         if (FocusSessionService.sessionState.value.isActive &&
             packageName != applicationContext.packageName &&
             blockedAppPackages.contains(packageName)
@@ -83,7 +112,7 @@ class AspirantAccessibilityService : AccessibilityService() {
             return
         }
 
-        // 0.2 Intention Pause (10s breath gate outside of focus mode)
+        // 0.3 Intention Pause (10s breath gate outside of focus mode)
         if (!FocusSessionService.sessionState.value.isActive &&
             prefs.isIntentionPauseEnabled &&
             packageName != applicationContext.packageName &&
@@ -112,7 +141,7 @@ class AspirantAccessibilityService : AccessibilityService() {
             }
         }
 
-        // 1. Strict Mode & Anti-Uninstall Lockout Check
+        // 1. Strict Mode Anti-Uninstall Protection Check
         if (prefs.isStrictModeActive) {
             checkStrictProtection(packageName, event)
         }
@@ -342,6 +371,21 @@ class AspirantAccessibilityService : AccessibilityService() {
             "redtube",
             "bet365",
             "stake.com"
+        )
+
+        val WHITELISTED_STUDY_TOOLS = setOf(
+            "com.google.android.calculator",
+            "com.android.calculator2",
+            "com.sec.android.app.popupcalculator",
+            "com.miui.calculator",
+            "com.coloros.calculator",
+            "com.adobe.reader",
+            "com.google.android.apps.pdfviewer",
+            "com.google.android.apps.docs",
+            "us.zoom.videomeetings",
+            "com.google.android.apps.meetings",
+            "org.anki4android",
+            "com.notion.id"
         )
     }
 }

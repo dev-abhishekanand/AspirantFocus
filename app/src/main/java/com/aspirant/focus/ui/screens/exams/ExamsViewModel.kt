@@ -55,8 +55,9 @@ class ExamsViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadTopicsForSubject(subjectName: String) {
+        val currentExam = selectedExam.value?.name ?: ""
         viewModelScope.launch {
-            repository.getTopicsForSubject(subjectName).collect { topics ->
+            repository.getTopicsForSubjectAndExam(subjectName, currentExam).collect { topics ->
                 val current = _topicsMap.value.toMutableMap()
                 current[subjectName] = topics
                 _topicsMap.value = current
@@ -71,6 +72,16 @@ class ExamsViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteExam(examName: String) {
+        viewModelScope.launch {
+            repository.deleteExam(examName)
+            val remaining = allExams.value.filter { it.name != examName }
+            if (remaining.isNotEmpty()) {
+                selectExam(remaining.first().name)
+            }
+        }
+    }
+
     fun addCustomSubject(subjectName: String) {
         val currentExam = selectedExam.value?.name ?: "General Study"
         viewModelScope.launch {
@@ -81,9 +92,20 @@ class ExamsViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addTopic(subjectName: String, topicName: String) {
+    fun deleteSubject(subject: Subject) {
         viewModelScope.launch {
-            repository.addTopic(Topic(subjectName = subjectName, name = topicName))
+            repository.deleteSubject(subject)
+            val current = _topicsMap.value.toMutableMap()
+            current.remove(subject.name)
+            _topicsMap.value = current
+            selectedExam.value?.name?.let { loadSubjectsForExam(it) }
+        }
+    }
+
+    fun addTopic(subjectName: String, topicName: String) {
+        val currentExam = selectedExam.value?.name ?: ""
+        viewModelScope.launch {
+            repository.addTopic(Topic(examName = currentExam, subjectName = subjectName, name = topicName))
             loadTopicsForSubject(subjectName)
         }
     }

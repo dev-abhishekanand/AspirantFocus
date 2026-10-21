@@ -35,6 +35,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allTopics: StateFlow<List<Topic>> = selectedExam.flatMapLatest { exam ->
+        if (exam != null) {
+            repository.getTopicsForExam(exam.name)
+        } else {
+            repository.getAllTopics()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _selectedSubject = MutableStateFlow(prefs.lastSelectedSubject)
     val selectedSubject: StateFlow<String> = _selectedSubject.asStateFlow()
 
@@ -56,14 +64,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedAudio = MutableStateFlow(FocusAudioType.NONE)
     val selectedAudio: StateFlow<FocusAudioType> = _selectedAudio.asStateFlow()
 
-    private val _todayStudySeconds = MutableStateFlow(0L)
-    val todayStudySeconds: StateFlow<Long> = _todayStudySeconds.asStateFlow()
+    private val startOfDayMillis: Long
+        get() {
+            val cal = Calendar.getInstance()
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            return cal.timeInMillis
+        }
+
+    private val todayCompletedSecondsFlow: Flow<Long> = repository.getSessionsSince(startOfDayMillis).map { sessions ->
+        sessions.sumOf { it.durationSeconds }
+    }
+
+    // Live synced study time: completed sessions today + active seconds ticking right now
+    val todayStudySeconds: StateFlow<Long> = combine(
+        todayCompletedSecondsFlow,
+        sessionState
+    ) { completedSec, state ->
+        val liveElapsed = if (state.isActive && !state.isBreak) {
+            maxOf(0L, state.totalSeconds - state.remainingSeconds)
+        } else 0L
+        completedSec + liveElapsed
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     private val _todayPhoneMillis = MutableStateFlow(0L)
     val todayPhoneMillis: StateFlow<Long> = _todayPhoneMillis.asStateFlow()
-
-    val allTopics: StateFlow<List<Topic>> = repository.getAllTopics()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val parkingItems: StateFlow<List<com.aspirant.focus.data.model.ParkingLotItem>> = repository.getAllParkingItems()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -102,19 +129,47 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         refreshStats()
+
+        // 1. When exam changes, cascade update subjects and auto-select first subject
         viewModelScope.launch {
-            _selectedSubject.collect { subject ->
-                loadTopics(subject)
+            subjects.collect { subjectList ->
+                if (subjectList.isNotEmpty()) {
+                    if (subjectList.none { it.name == _selectedSubject.value }) {
+                        val firstSubject = subjectList.first().name
+                        _selectedSubject.value = firstSubject
+                        prefs.lastSelectedSubject = firstSubject
+                    }
+                } else {
+                    _selectedSubject.value = ""
+                }
+            }
+        }
+
+        // 2. When subject or exam changes, cascade update topics and auto-select first topic
+        viewModelScope.launch {
+            combine(_selectedSubject, selectedExam) { subject, exam ->
+                Pair(subject, exam?.name ?: "")
+            }.collect { (subject, examName) ->
+                loadTopics(subject, examName)
             }
         }
     }
 
-    private fun loadTopics(subject: String) {
+    private fun loadTopics(subject: String, examName: String) {
+        if (subject.isBlank()) {
+            _topics.value = emptyList()
+            _selectedTopic.value = ""
+            return
+        }
         viewModelScope.launch {
-            repository.getTopicsForSubject(subject).collect { topicList ->
+            repository.getTopicsForSubjectAndExam(subject, examName).collect { topicList ->
                 _topics.value = topicList
-                if (topicList.isNotEmpty() && _selectedTopic.value.isEmpty()) {
-                    _selectedTopic.value = topicList.first().name
+                if (topicList.isNotEmpty()) {
+                    if (topicList.none { it.name == _selectedTopic.value }) {
+                        _selectedTopic.value = topicList.first().name
+                    }
+                } else {
+                    _selectedTopic.value = ""
                 }
             }
         }
@@ -183,9 +238,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun emergencyUnlock() {
         prefs.isStrictModeActive = false
         prefs.strictSessionEndTimeMillis = 0L
+        prefs.emergencyAccessEndTimeMillis = 0L
         FocusAudioGenerator.instance.stop()
         FocusSessionService.stop(getApplication())
         refreshStats()
+    }
+
+    fun grantEmergencyAccess(minutes: Int = 5) {
+        prefs.emergencyAccessEndTimeMillis = System.currentTimeMillis() + minutes * 60 * 1000L
     }
 
     fun refreshStats() {

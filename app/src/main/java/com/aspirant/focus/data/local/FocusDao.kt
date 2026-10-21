@@ -40,6 +40,9 @@ interface FocusDao {
     @Delete
     suspend fun deleteSubject(subject: Subject)
 
+    @Query("DELETE FROM study_subjects WHERE examName = :examName")
+    suspend fun deleteSubjectsForExam(examName: String)
+
     @Query("SELECT * FROM study_subjects WHERE examName = :examName")
     fun getSubjectsForExam(examName: String): Flow<List<Subject>>
 
@@ -56,8 +59,20 @@ interface FocusDao {
     @Delete
     suspend fun deleteTopic(topic: Topic)
 
+    @Query("DELETE FROM study_topics WHERE subjectName = :subjectName")
+    suspend fun deleteTopicsForSubject(subjectName: String)
+
+    @Query("DELETE FROM study_topics WHERE examName = :examName")
+    suspend fun deleteTopicsForExam(examName: String)
+
+    @Query("SELECT * FROM study_topics WHERE subjectName = :subjectName AND (:examName = '' OR examName = :examName)")
+    fun getTopicsForSubjectAndExam(subjectName: String, examName: String): Flow<List<Topic>>
+
     @Query("SELECT * FROM study_topics WHERE subjectName = :subjectName")
     fun getTopicsForSubject(subjectName: String): Flow<List<Topic>>
+
+    @Query("SELECT * FROM study_topics WHERE :examName = '' OR examName = :examName")
+    fun getTopicsForExam(examName: String): Flow<List<Topic>>
 
     @Query("SELECT * FROM study_topics")
     fun getAllTopics(): Flow<List<Topic>>
@@ -68,6 +83,9 @@ interface FocusDao {
 
     @Query("SELECT * FROM app_block_rules")
     fun getAllAppRules(): Flow<List<AppBlockRule>>
+
+    @Query("SELECT * FROM app_block_rules WHERE isWhitelistedForStudy = 1")
+    fun getWhitelistedStudyApps(): Flow<List<AppBlockRule>>
 
     @Query("SELECT * FROM app_block_rules WHERE packageName = :pkg LIMIT 1")
     suspend fun getRuleForPackage(pkg: String): AppBlockRule?

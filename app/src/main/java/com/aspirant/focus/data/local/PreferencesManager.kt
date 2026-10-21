@@ -134,8 +134,26 @@ class PreferencesManager(context: Context) {
         get() = prefs.getBoolean(KEY_EMERGENCY_MCQ, true)
         set(value) = prefs.edit().putBoolean(KEY_EMERGENCY_MCQ, value).apply()
 
+    // --- Kiosk Lock (Prevent Minimizing during Strict Mode) ---
+    var isKioskLockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_KIOSK_LOCK, true)
+        set(value) = prefs.edit().putBoolean(KEY_KIOSK_LOCK, value).apply()
+
+    // --- Study Tools Whitelist during Strict Mode ---
+    var isStudyToolsWhitelisted: Boolean
+        get() = prefs.getBoolean(KEY_STUDY_TOOLS_WHITELIST, true)
+        set(value) = prefs.edit().putBoolean(KEY_STUDY_TOOLS_WHITELIST, value).apply()
+
+    // --- Temporary Emergency Minimize Phone Access ---
+    var emergencyAccessEndTimeMillis: Long
+        get() = prefs.getLong(KEY_EMERGENCY_ACCESS_END, 0L)
+        set(value) = prefs.edit().putLong(KEY_EMERGENCY_ACCESS_END, value).apply()
+
     companion object {
         private const val PREFS_NAME = "aspirant_focus_prefs"
+        private const val KEY_KIOSK_LOCK = "key_kiosk_lock"
+        private const val KEY_STUDY_TOOLS_WHITELIST = "key_study_tools_whitelist"
+        private const val KEY_EMERGENCY_ACCESS_END = "key_emergency_access_end"
         private const val KEY_REELS_BLOCKER = "key_reels_blocker"
         private const val KEY_SHORTS_BLOCKER = "key_shorts_blocker"
         private const val KEY_YT_STUDY_MODE = "key_yt_study_mode"
