@@ -10,6 +10,7 @@ class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
+            com.aspirant.focus.service.BlockerProtectionService.start(context)
             val prefs = AspirantApplication.instance.preferencesManager
             if (prefs.isStrictModeActive) {
                 val now = System.currentTimeMillis()

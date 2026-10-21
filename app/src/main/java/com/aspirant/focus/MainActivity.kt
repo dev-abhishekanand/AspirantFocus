@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.aspirant.focus.service.BlockerProtectionService.start(this)
         setContent {
             AspirantFocusTheme {
                 MainAppNavHost()

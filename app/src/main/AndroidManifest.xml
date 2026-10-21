@@ -64,6 +64,16 @@
                 android:value="Focus timer and session guard for students" />
         </service>
 
+        <!-- 24/7 Blocker Protection Foreground Service (Prevents Doze Mode / Background Death) -->
+        <service
+            android:name=".service.BlockerProtectionService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="24/7 background guard for adult content and curfew protection" />
+        </service>
+
         <!-- Boot Receiver: Resume Strict Sessions after restart -->
         <receiver
             android:name=".receiver.BootReceiver"

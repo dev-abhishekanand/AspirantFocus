@@ -42,6 +42,7 @@ class AspirantAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlayManager = InterventionOverlayManager(this)
+        com.aspirant.focus.service.BlockerProtectionService.start(this)
 
         val db = AspirantApplication.instance.database
         serviceScope.launch {
@@ -60,27 +61,53 @@ class AspirantAccessibilityService : AccessibilityService() {
         if (event == null) return
         val packageName = event.packageName?.toString() ?: return
 
-        // 0. Curfew Guard (Bedtime & Morning Lock)
-        // Hard-locks all social media, entertainment, distracting apps, and user-blocked apps
-        if (isCurfewActive() &&
-            packageName != applicationContext.packageName &&
-            packageName != "com.android.systemui" &&
-            (DEFAULT_DISTRACTING_PACKAGES.contains(packageName) ||
-             blockedAppPackages.contains(packageName) ||
-             packageName == PKG_INSTAGRAM ||
-             packageName == PKG_INSTAGRAM_LITE ||
-             packageName == PKG_YOUTUBE)
-        ) {
-            val curfewEndTime = String.format(Locale.getDefault(), "%02d:%02d", prefs.curfewEndHour, prefs.curfewEndMinute)
-            val title = "🌙 Bedtime Curfew Active"
-            val msg = "Sleep & morning momentum protected. Distracting apps are locked until $curfewEndTime."
+        try {
+            // 0. Curfew Guard (Bedtime & Morning Lock)
+            // Hard-locks all social media, entertainment, distracting apps, and user-blocked apps
+            if (isCurfewActive() &&
+                packageName != applicationContext.packageName &&
+                packageName != "com.android.systemui" &&
+                (DEFAULT_DISTRACTING_PACKAGES.contains(packageName) ||
+                 blockedAppPackages.contains(packageName) ||
+                 packageName == PKG_INSTAGRAM ||
+                 packageName == PKG_INSTAGRAM_LITE ||
+                 packageName == PKG_YOUTUBE)
+            ) {
+                val curfewEndTime = String.format(Locale.getDefault(), "%02d:%02d", prefs.curfewEndHour, prefs.curfewEndMinute)
+                val title = "🌙 Bedtime Curfew Active"
+                val msg = "Sleep & morning momentum protected. Distracting apps are locked until $curfewEndTime."
 
-            ActiveBlockNotice.show(title, msg, "CURFEW")
-            reForegroundAspirantFocus("CURFEW")
-            performGlobalAction(GLOBAL_ACTION_HOME)
-            throttleIntervention(title, msg, isStrict = true)
-            return
-        }
+                ActiveBlockNotice.show(title, msg, "CURFEW")
+                reForegroundAspirantFocus("CURFEW")
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                throttleIntervention(title, msg, isStrict = true)
+                return
+            }
+
+            // 0.05 YouTube Web Curfew Check (Blocks youtube.com in browsers during bedtime curfew)
+            if (isCurfewActive() && isBrowserPackage(packageName)) {
+                val root = rootInActiveWindow
+                if (root != null) {
+                    val isYouTubeWeb = containsNodeMatching(root) { node ->
+                        val text = node.text?.toString()?.lowercase() ?: ""
+                        val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+                        text.contains("youtube.com") || desc.contains("youtube.com") ||
+                        text.contains("m.youtube.com") || desc.contains("m.youtube.com") ||
+                        text.contains("youtu.be") || desc.contains("youtu.be")
+                    }
+                    if (isYouTubeWeb) {
+                        val curfewEndTime = String.format(Locale.getDefault(), "%02d:%02d", prefs.curfewEndHour, prefs.curfewEndMinute)
+                        val title = "🌙 YouTube Web Blocked"
+                        val msg = "YouTube is locked until $curfewEndTime to protect your sleep."
+                        ActiveBlockNotice.show(title, msg, "CURFEW")
+                        reForegroundAspirantFocus("CURFEW")
+                        performGlobalAction(GLOBAL_ACTION_HOME)
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                        throttleIntervention(title, msg, isStrict = true)
+                        return
+                    }
+                }
+            }
 
         // 0.1 Strict Mode Kiosk Lockout (Cannot minimize app, cannot switch to unauthorized apps)
         val isEmergencyAccess = System.currentTimeMillis() < prefs.emergencyAccessEndTimeMillis
@@ -198,7 +225,10 @@ class AspirantAccessibilityService : AccessibilityService() {
             packageName != applicationContext.packageName && packageName != "com.android.systemui") {
             checkInAppWebviewSecurity()
         }
+    } catch (t: Throwable) {
+        // Prevent service from crashing on transient node recycling or OS window changes
     }
+}
 
     override fun onInterrupt() {}
 
@@ -521,12 +551,16 @@ class AspirantAccessibilityService : AccessibilityService() {
         node: AccessibilityNodeInfo,
         predicate: (AccessibilityNodeInfo) -> Boolean
     ): Boolean {
-        if (predicate(node)) return true
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            if (containsNodeMatching(child, predicate)) {
-                return true
+        try {
+            if (predicate(node)) return true
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                if (containsNodeMatching(child, predicate)) {
+                    return true
+                }
             }
+        } catch (_: Throwable) {
+            // Protect against recycled nodes / transient view changes
         }
         return false
     }

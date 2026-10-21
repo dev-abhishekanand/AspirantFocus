@@ -23,11 +23,12 @@ class AspirantApplication : Application() {
         preferencesManager = PreferencesManager(this)
 
         createNotificationChannels()
+        com.aspirant.focus.service.BlockerProtectionService.start(this)
     }
 
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            val timerChannel = NotificationChannel(
                 CHANNEL_FOCUS_TIMER,
                 getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW
@@ -36,13 +37,24 @@ class AspirantApplication : Application() {
                 setShowBadge(false)
             }
 
+            val guardChannel = NotificationChannel(
+                CHANNEL_BLOCKER_GUARD,
+                "24/7 Blocker Protection Shield",
+                NotificationManager.IMPORTANCE_MIN
+            ).apply {
+                description = "Keeps adult content blocker and curfew shield alive 24/7 in background"
+                setShowBadge(false)
+            }
+
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(timerChannel)
+            notificationManager.createNotificationChannel(guardChannel)
         }
     }
 
     companion object {
         const val CHANNEL_FOCUS_TIMER = "channel_focus_timer"
+        const val CHANNEL_BLOCKER_GUARD = "channel_blocker_guard"
         lateinit var instance: AspirantApplication
             private set
     }
