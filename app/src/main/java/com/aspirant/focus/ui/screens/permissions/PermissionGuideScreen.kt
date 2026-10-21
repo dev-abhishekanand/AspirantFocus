@@ -81,42 +81,54 @@ fun PermissionGuideScreen(onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Android 13/14/15 Restricted Settings Help Card
+            // Android 13/14/15 Restricted Settings 2-Step Card
             if (!hasAccessibility) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = WarningAmber.copy(alpha = 0.12f))
+                    colors = CardDefaults.cardColors(containerColor = WarningAmber.copy(alpha = 0.12f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, WarningAmber.copy(alpha = 0.5f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("⚠️", fontSize = 18.sp)
+                            Text("⚡", fontSize = 20.sp)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Android 13 / 14 / 15 'Restricted Setting' Fix",
-                                fontSize = 13.sp,
+                                text = "2-Step Blocker Activation",
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = WarningAmber
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "If Android greys out the switch saying 'Restricted setting: currently unavailable':\n\n" +
-                                    "1. Tap 'Open App Info' below.\n" +
-                                    "2. Tap the 3 dots (⋮) in the top-right corner.\n" +
-                                    "3. Tap 'Allow restricted settings' & enter PIN.\n" +
-                                    "4. Return here and tap 'Enable in Settings'.",
+                            text = "On Android 13, 14 & 15, activating the service requires 2 quick steps:\n\n" +
+                                   "• STEP 1 (Unlock Security):\n" +
+                                   "  Tap 'Step 1: App Info' -> tap the 3 dots (⋮) in top-right -> tap 'Allow restricted settings'.\n" +
+                                   "  ⚠️ NOTE: If the 3 dots are already gone, Step 1 is ALREADY COMPLETED!\n\n" +
+                                   "• STEP 2 (Turn Switch ON):\n" +
+                                   "  Tap 'Step 2: Turn Switch ON' below -> find 'Aspirant Focus' (under Downloaded apps) -> FLIP THE SWITCH TO ON.",
                             fontSize = 12.sp,
                             color = TextPrimary,
                             lineHeight = 17.sp
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = { PermissionHelper.openAppDetailsSettings(context) },
-                            colors = ButtonDefaults.buttonColors(containerColor = WarningAmber),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Open App Info (Allow Restricted Settings)", color = BackgroundDark, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { PermissionHelper.openAppDetailsSettings(context) },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Step 1: App Info", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { PermissionHelper.openAccessibilitySettings(context) },
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1.3f)
+                            ) {
+                                Text("Step 2: Turn Switch ON", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
