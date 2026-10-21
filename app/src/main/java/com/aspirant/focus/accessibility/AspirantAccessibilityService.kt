@@ -296,24 +296,45 @@ class AspirantAccessibilityService : AccessibilityService() {
     private fun checkBrowserSecurityAndContent(packageName: String) {
         val root = rootInActiveWindow ?: return
 
-        // 1. Incognito / Private Browsing Blocker
-        // Blocks opening or using Incognito/Private tabs across Chrome, Samsung Internet, Firefox, Edge, etc.
+        val isBrave = packageName.contains("brave", ignoreCase = true)
+
+        // 1. Incognito & Private Tab Destroyer (24/7 Zero Loophole)
+        // Eliminates Incognito/Private tabs across Brave, Chrome, Firefox, Samsung, Edge, Opera, etc.
         val isIncognito = containsNodeMatching(root) { node ->
             val text = node.text?.toString()?.lowercase() ?: ""
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
             val id = node.viewIdResourceName?.lowercase() ?: ""
 
+            // Universal Incognito / Private indicators
             text.contains("incognito") || desc.contains("incognito") || id.contains("incognito") ||
-            text.contains("secret mode") || desc.contains("secret mode") ||
+            text.contains("secret mode") || desc.contains("secret mode") || id.contains("secret_mode") ||
+            text.contains("inprivate") || desc.contains("inprivate") || id.contains("inprivate") ||
             text.contains("private tab") || desc.contains("private tab") ||
-            text.contains("inprivate") || desc.contains("inprivate") ||
+            text.contains("private tabs") || desc.contains("private tabs") ||
+            text.contains("new private tab") || desc.contains("new private tab") ||
+            text.contains("close private tab") || desc.contains("close private tabs") ||
+            text.contains("private mode") || desc.contains("private mode") ||
             text.contains("private browsing") || desc.contains("private browsing") ||
-            desc.contains("new incognito tab") || text.contains("close incognito tabs")
+            text.contains("private with tor") || desc.contains("private with tor") ||
+            text.contains("tor tab") || desc.contains("tor tab") ||
+            text.contains("new tor tab") || desc.contains("new tor tab") ||
+            desc.contains("switch to private") || text.contains("switch to private") ||
+            desc.contains("new incognito tab") || text.contains("close incognito tabs") ||
+            id.contains("tab_switcher_mode_switch_tabs_button") ||
+            id.contains("tab_switcher_private_tabs_button") ||
+            id.contains("private_tab") || id.contains("tor_tab") ||
+            id.contains("new_tab_menu_private") ||
+            (isBrave && (
+                text == "private" || desc == "private" ||
+                desc.contains("private") ||
+                id.contains("private") ||
+                text.contains("tor") || desc.contains("tor") || id.contains("tor")
+            ))
         }
 
         if (isIncognito) {
-            val title = "🔒 Incognito / Private Mode Blocked"
-            val msg = "Private browsing is strictly disabled to prevent adult content loopholes."
+            val title = "🔒 Private Browsing Destroyed"
+            val msg = "Private & Incognito browsing is strictly disabled 24/7 to prevent adult content loopholes."
             ActiveBlockNotice.show(title, msg, "INCOGNITO")
             reForegroundAspirantFocus("INCOGNITO")
             performGlobalAction(GLOBAL_ACTION_HOME)
@@ -326,25 +347,24 @@ class AspirantAccessibilityService : AccessibilityService() {
         val isAdultContent = containsNodeMatching(root) { node ->
             val text = node.text?.toString()?.lowercase() ?: ""
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-            val id = node.viewIdResourceName?.lowercase() ?: ""
 
-            val isUrlBar = id.contains("url") || id.contains("location") || id.contains("address") || id.contains("search") || id.contains("omnibox")
-
-            ADULT_KEYWORDS_AND_DOMAINS.any { keyword ->
-                if (isUrlBar) {
-                    text.contains(keyword) || desc.contains(keyword)
-                } else {
-                    // Check words separated by spaces or punctuation
-                    text.split(" ", "/", ".", "-", "?", "&", "=").any { word ->
-                        word == keyword || (keyword.length >= 4 && word.contains(keyword))
-                    }
+            // 1. Direct match on unambiguous adult terms/domains
+            UNAMBIGUOUS_ADULT_KEYWORDS.any { keyword ->
+                text.contains(keyword) || desc.contains(keyword)
+            } ||
+            // 2. Delimited match for terms that may appear as substrings in legitimate words
+            DELIMITED_ADULT_KEYWORDS.any { keyword ->
+                text.split(" ", "/", ".", "-", "?", "&", "=", "_", "@", "+", ":", ";", "#", ",", "(", ")").any { word ->
+                    word == keyword
+                } || desc.split(" ", "/", ".", "-", "?", "&", "=", "_", "@", "+", ":", ";", "#", ",", "(", ")").any { word ->
+                    word == keyword
                 }
             }
         }
 
         if (isAdultContent) {
             val title = "🛑 Adult Content Blocked"
-            val msg = "Access to adult, pornographic, or gambling content is strictly blocked on this device."
+            val msg = "Access to adult, pornographic, or gambling content is strictly blocked 24/7."
             ActiveBlockNotice.show(title, msg, "ADULT_CONTENT")
             reForegroundAspirantFocus("ADULT_CONTENT")
             performGlobalAction(GLOBAL_ACTION_HOME)
@@ -356,11 +376,11 @@ class AspirantAccessibilityService : AccessibilityService() {
     private fun isBrowserPackage(packageName: String): Boolean {
         if (BROWSER_PACKAGES.contains(packageName)) return true
         val lower = packageName.lowercase()
-        return lower.contains("browser") || lower.contains("chrome") || lower.contains("firefox") || lower.contains("opera")
+        return lower.contains("browser") || lower.contains("chrome") || lower.contains("firefox") || lower.contains("opera") || lower.contains("brave")
     }
 
     private fun isTelegramPackage(packageName: String): Boolean {
-        return TELEGRAM_PACKAGES.contains(packageName) || packageName.lowercase().contains("telegram")
+        return TELEGRAM_PACKAGES.contains(packageName) || packageName.lowercase().contains("telegram") || packageName.lowercase().contains("challegram")
     }
 
     private fun checkTelegramAdultContent() {
@@ -370,18 +390,23 @@ class AspirantAccessibilityService : AccessibilityService() {
             val text = node.text?.toString()?.lowercase() ?: ""
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
 
-            ADULT_KEYWORDS_AND_DOMAINS.any { keyword ->
-                text.split(" ", "/", ".", "-", "?", "&", "=", "_", "@").any { word ->
-                    word == keyword || (keyword.length >= 4 && word.contains(keyword))
-                } || desc.split(" ", "/", ".", "-", "?", "&", "=", "_", "@").any { word ->
-                    word == keyword || (keyword.length >= 4 && word.contains(keyword))
+            // 1. Direct match on unambiguous adult keywords & channel indicators
+            TELEGRAM_UNAMBIGUOUS_KEYWORDS.any { keyword ->
+                text.contains(keyword) || desc.contains(keyword)
+            } ||
+            // 2. Delimited match for short tags & keywords (e.g. "18+", "mms", "leaks", "bhabhi", "anal", "escort")
+            TELEGRAM_DELIMITED_KEYWORDS.any { keyword ->
+                text.split(" ", "/", ".", "-", "?", "&", "=", "_", "@", "+", ":", ";", "#", ",", "(", ")", "[", "]").any { word ->
+                    word == keyword
+                } || desc.split(" ", "/", ".", "-", "?", "&", "=", "_", "@", "+", ":", ";", "#", ",", "(", ")", "[", "]").any { word ->
+                    word == keyword
                 }
             }
         }
 
         if (isAdultDetected) {
-            val title = "🛑 Adult Content Blocked"
-            val msg = "Adult channels, groups, and explicit content in Telegram are strictly blocked."
+            val title = "🛑 Telegram Adult Content Blocked"
+            val msg = "Adult channels, groups, and explicit searches in Telegram are strictly blocked 24/7."
             ActiveBlockNotice.show(title, msg, "ADULT_CONTENT")
             reForegroundAspirantFocus("ADULT_CONTENT")
             performGlobalAction(GLOBAL_ACTION_HOME)
@@ -456,17 +481,23 @@ class AspirantAccessibilityService : AccessibilityService() {
             "com.discord",
             "org.telegram.messenger",
             "org.telegram.messenger.web",
+            "org.telegram.messenger.beta",
             "org.telegram.plus",
             "org.telegram.BETA",
-            "org.thunderdog.challegram"
+            "org.thunderdog.challegram",
+            "nekox.messenger",
+            "org.forkclient.messenger"
         )
 
         val TELEGRAM_PACKAGES = setOf(
             "org.telegram.messenger",
             "org.telegram.messenger.web",
+            "org.telegram.messenger.beta",
             "org.telegram.plus",
             "org.telegram.BETA",
-            "org.thunderdog.challegram"
+            "org.thunderdog.challegram",
+            "nekox.messenger",
+            "org.forkclient.messenger"
         )
 
         val INSTALLER_PACKAGES = setOf(
@@ -485,9 +516,13 @@ class AspirantAccessibilityService : AccessibilityService() {
             "org.mozilla.focus",
             "org.mozilla.fenix",
             "com.brave.browser",
+            "com.brave.browser_beta",
+            "com.brave.browser_nightly",
+            "com.brave.browser_dev",
             "com.opera.browser",
             "com.opera.mini.native",
             "com.opera.touch",
+            "com.opera.gx",
             "com.microsoft.emmx",
             "com.duckduckgo.mobile.android",
             "com.sec.android.app.sbrowser",
@@ -504,7 +539,8 @@ class AspirantAccessibilityService : AccessibilityService() {
             "org.torproject.torbrowser"
         )
 
-        val ADULT_KEYWORDS_AND_DOMAINS = listOf(
+        // 1. Unambiguous Adult Terms & Major Tubes (Zero benign occurrence in English language)
+        val UNAMBIGUOUS_ADULT_KEYWORDS = listOf(
             // Top Adult Sites & Tubes
             "pornhub", "xvideos", "xnxx", "xhamster", "redtube", "youporn", "brazzers",
             "spankbang", "chaturbate", "stripchat", "onlyfans", "erome", "hentai",
@@ -515,17 +551,36 @@ class AspirantAccessibilityService : AccessibilityService() {
             "fapello", "faphero", "coomer", "kemono", "javhd", "javlibrary",
             "missav", "jable", "avgle", "spankwire", "heavy-r", "kaotic",
 
-            // Explicit Adult Keywords
-            "porn", "xxx", "nude", "nudes", "naked", "nsfw", "erotic",
-            "fetish", "camgirl", "camgirls", "escort", "escorts",
-            "boobs", "pussy", "milf", "anal", "blowjob", "creampie",
-            "hardcore", "softcore", "playboy", "penthouse", "fap",
-            "masturbat", "orgasm", "dildo", "vibrator", "bdsm",
-            "gangbang", "threesome", "shemale", "ladyboy", "incest",
+            // Indian & Regional Explicit Search Terms
+            "desiporn", "desisex", "indianporn", "bhabhiporn", "malluporn", "auntyporn",
+            "choot", "antichut", "fulldesi", "savita bhabhi", "desi mms", "desi leak",
 
+            // Explicit Adult Roots (Cannot appear inside standard educational words)
+            "porn", "xxx", "nsfw", "camgirl", "camgirls", "blowjob", "creampie",
+            "gangbang", "threesome", "shemale", "ladyboy", "masturbat", "orgasm",
+            "vibrator", "dildo", "playboy", "penthouse", "fetish", "erotic",
+            "nude", "nudes", "naked", "uncensored"
+        )
+
+        // 2. Delimited Adult & Gambling Keywords (Checked with word-boundary splitting to avoid false positives)
+        val DELIMITED_ADULT_KEYWORDS = listOf(
+            "anal", "boobs", "pussy", "milf", "escort", "escorts", "fap",
+            "bdsm", "incest", "leaks", "leak", "mms", "scandal", "bhabhi",
             // Gambling & Betting
             "bet365", "1xbet", "stake.com", "parimatch", "betway", "dafabet",
-            "melbet", "22bet", "lottery", "casino", "roulette", "blackjack"
+            "melbet", "22bet", "casino", "roulette", "blackjack", "gambling"
+        )
+
+        // 3. Telegram-Specific Unambiguous Adult Channel & Content Identifiers
+        val TELEGRAM_UNAMBIGUOUS_KEYWORDS = UNAMBIGUOUS_ADULT_KEYWORDS + listOf(
+            "adultchannel", "adultgroup", "terabox 18+", "mega 18+", "mega leak",
+            "sex video", "hot video", "sexy video", "viral mms", "desiporn", "desi mms"
+        )
+
+        // 4. Telegram-Specific Delimited Identifiers (Tags, Channel Names, Searches)
+        val TELEGRAM_DELIMITED_KEYWORDS = listOf(
+            "18+", "+18", "nsfw", "mms", "leak", "leaks", "bhabhi", "scandal",
+            "anal", "boobs", "pussy", "milf", "escort", "fap", "bdsm", "choot", "nude", "nudes"
         )
 
         val WHITELISTED_STUDY_TOOLS = setOf(
