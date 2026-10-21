@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Aspirant Focus</string>
+    <string name="accessibility_service_description">Aspirant Focus uses this service to automatically detect and block short-form dopamine triggers (Instagram Reels, YouTube Shorts), enforce Strict Mode to prevent early quits during study sessions, and protect against premature app uninstallation.</string>
+    
+    <!-- Notifications -->
+    <string name="notification_channel_name">Focus Session Active</string>
+    <string name="notification_channel_desc">Shows your current study session and countdown timer</string>
+    <string name="strict_mode_active_alert">Strict Mode Active: Focus session is locked until the timer ends.</string>
+</resources>
