@@ -7,6 +7,8 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.aspirant.focus.AspirantApplication
 import com.aspirant.focus.overlay.InterventionOverlayManager
+import com.aspirant.focus.service.FocusSessionService
+import kotlinx.coroutines.*
 
 class AspirantAccessibilityService : AccessibilityService() {
 
@@ -14,15 +16,40 @@ class AspirantAccessibilityService : AccessibilityService() {
     private val prefs by lazy { AspirantApplication.instance.preferencesManager }
     private val handler = Handler(Looper.getMainLooper())
     private var lastInterventionTime = 0L
+    private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
+    private var blockedAppPackages = setOf<String>()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlayManager = InterventionOverlayManager(this)
+
+        // Observe custom blocked apps from database
+        val db = AspirantApplication.instance.database
+        serviceScope.launch {
+            db.focusDao().getAllAppRules().collect { rules ->
+                blockedAppPackages = rules.filter { it.isBlockedDuringFocus && !it.blockReelsOnly }
+                    .map { it.packageName }
+                    .toSet()
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         val packageName = event.packageName?.toString() ?: return
+
+        // 0. Dynamic App Blocking (Blocks any app added to the blocker during focus)
+        if (FocusSessionService.sessionState.value.isActive &&
+            packageName != applicationContext.packageName &&
+            blockedAppPackages.contains(packageName)
+        ) {
+            throttleIntervention(
+                "App Blocked During Focus!",
+                "You have an active study session for ${FocusSessionService.sessionState.value.subject}. Stay locked in."
+            )
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            return
+        }
 
         // 1. Strict Mode & Anti-Uninstall Lockout Check
         if (prefs.isStrictModeActive) {

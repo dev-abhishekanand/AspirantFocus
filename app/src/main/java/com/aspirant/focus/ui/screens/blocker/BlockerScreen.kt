@@ -1,10 +1,16 @@
 package com.aspirant.focus.ui.screens.blocker
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,7 +19,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aspirant.focus.data.model.AppBlockRule
 import com.aspirant.focus.ui.theme.*
 
 @Composable
@@ -23,6 +31,10 @@ fun BlockerScreen(viewModel: BlockerViewModel = viewModel()) {
     val isYtStudyEnabled by viewModel.isYouTubeStudyModeEnabled.collectAsState()
     val isWebsiteEnabled by viewModel.isWebsiteBlocker.collectAsState()
     val appRules by viewModel.appRules.collectAsState()
+    val availableApps by viewModel.availableAppsToAdd.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+
+    var showAddDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -98,17 +110,40 @@ fun BlockerScreen(viewModel: BlockerViewModel = viewModel()) {
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            Text(
-                text = "APPS TO BLOCK DURING FOCUS SESSIONS",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextMuted,
-                letterSpacing = 1.sp
-            )
+            // Section Header with + Add App Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "APPS TO BLOCK DURING FOCUS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
+                    letterSpacing = 1.sp
+                )
+                Button(
+                    onClick = {
+                        viewModel.updateSearchQuery("")
+                        viewModel.loadInstalledApps()
+                        showAddDialog = true
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add App", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        items(appRules) { rule ->
+        // List of Blocked Apps
+        items(appRules, key = { it.packageName }) { rule ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -136,14 +171,135 @@ fun BlockerScreen(viewModel: BlockerViewModel = viewModel()) {
                             color = TextMuted
                         )
                     }
-                    Switch(
-                        checked = rule.isBlockedDuringFocus,
-                        onCheckedChange = { viewModel.toggleAppBlock(rule) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = PrimaryEmerald,
-                            checkedTrackColor = PrimaryEmerald.copy(alpha = 0.5f)
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = rule.isBlockedDuringFocus,
+                            onCheckedChange = { viewModel.toggleAppBlock(rule) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = PrimaryEmerald,
+                                checkedTrackColor = PrimaryEmerald.copy(alpha = 0.5f)
+                            )
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = { viewModel.removeApp(rule) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = TextMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Add App Dialog Modal
+    if (showAddDialog) {
+        Dialog(onDismissRequest = { showAddDialog = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = SurfaceDark)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Add App to Blocker",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        IconButton(onClick = { showAddDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Search Input
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { viewModel.updateSearchQuery(it) },
+                        placeholder = { Text("Search installed apps...", fontSize = 13.sp, color = TextMuted) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PrimaryEmerald,
+                            unfocusedBorderColor = SurfaceCard,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        ),
+                        shape = RoundedCornerShape(12.dp)
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // App Selection List
+                    if (availableApps.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No more apps to add",
+                                color = TextMuted,
+                                fontSize = 14.sp
+                            )
+                        }
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                            items(availableApps) { app ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.addApp(app)
+                                            showAddDialog = false
+                                        }
+                                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = app.appName,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = TextPrimary
+                                        )
+                                        Text(
+                                            text = app.packageName,
+                                            fontSize = 11.sp,
+                                            color = TextMuted
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add",
+                                        tint = PrimaryEmerald
+                                    )
+                                }
+                                Divider(color = Color.White.copy(alpha = 0.04f))
+                            }
+                        }
+                    }
                 }
             }
         }

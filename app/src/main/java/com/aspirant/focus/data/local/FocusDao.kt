@@ -38,4 +38,7 @@ interface FocusDao {
 
     @Query("SELECT * FROM app_block_rules WHERE packageName = :pkg LIMIT 1")
     suspend fun getRuleForPackage(pkg: String): AppBlockRule?
+
+    @Delete
+    suspend fun deleteAppRule(rule: AppBlockRule)
 }

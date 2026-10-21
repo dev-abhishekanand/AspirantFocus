@@ -28,4 +28,7 @@ class FocusRepository(private val focusDao: FocusDao) {
 
     suspend fun getRuleForPackage(pkg: String): AppBlockRule? =
         focusDao.getRuleForPackage(pkg)
+
+    suspend fun deleteAppRule(rule: AppBlockRule) =
+        focusDao.deleteAppRule(rule)
 }
