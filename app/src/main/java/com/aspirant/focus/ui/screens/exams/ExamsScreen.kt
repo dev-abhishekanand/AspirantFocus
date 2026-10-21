@@ -103,6 +103,51 @@ fun ExamsScreen(viewModel: ExamsViewModel = viewModel()) {
                 }
             }
 
+            // Spaced Repetition Revisions Due Section
+            val dueRevisions by viewModel.dueRevisions.collectAsState()
+            if (dueRevisions.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = PurpleAesthetic.copy(alpha = 0.15f))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🧠 REVISION RADAR", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PurpleAesthetic, letterSpacing = 1.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Badge(containerColor = PurpleAesthetic) { Text("${dueRevisions.size} due", color = Color.White, fontSize = 10.sp) }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Ebbinghaus curve: revise these today to prevent memory decay.", fontSize = 11.sp, color = TextMuted)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        dueRevisions.forEach { rev ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(rev.topicName, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                    Text("${rev.subjectName} • Stage ${rev.stage}", fontSize = 11.sp, color = TextSecondary)
+                                }
+                                Button(
+                                    onClick = { viewModel.completeRevision(rev) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = PurpleAesthetic),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text("Revise Done", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             // Subjects & Topics Header with "+ Add Subject"

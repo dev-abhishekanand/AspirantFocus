@@ -59,6 +59,9 @@ interface FocusDao {
     @Query("SELECT * FROM study_topics WHERE subjectName = :subjectName")
     fun getTopicsForSubject(subjectName: String): Flow<List<Topic>>
 
+    @Query("SELECT * FROM study_topics")
+    fun getAllTopics(): Flow<List<Topic>>
+
     // App Block Rules
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAppRule(rule: AppBlockRule)
@@ -71,4 +74,34 @@ interface FocusDao {
 
     @Delete
     suspend fun deleteAppRule(rule: AppBlockRule)
+
+    // Spaced Repetition Revisions
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRevisions(revisions: List<RevisionItem>)
+
+    @Update
+    suspend fun updateRevision(revision: RevisionItem)
+
+    @Delete
+    suspend fun deleteRevision(revision: RevisionItem)
+
+    @Query("SELECT * FROM revisions WHERE isCompleted = 0 AND scheduledDateMillis <= :dueTime ORDER BY scheduledDateMillis ASC")
+    fun getDueRevisions(dueTime: Long): Flow<List<RevisionItem>>
+
+    @Query("SELECT * FROM revisions ORDER BY scheduledDateMillis ASC")
+    fun getAllRevisions(): Flow<List<RevisionItem>>
+
+    // Distraction Parking Lot
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertParkingItem(item: ParkingLotItem): Long
+
+    @Query("SELECT * FROM parking_lot ORDER BY timestamp DESC")
+    fun getAllParkingItems(): Flow<List<ParkingLotItem>>
+
+    @Delete
+    suspend fun deleteParkingItem(item: ParkingLotItem)
+
+    @Query("DELETE FROM parking_lot WHERE isReviewed = 1")
+    suspend fun clearReviewedParkingItems()
 }
+

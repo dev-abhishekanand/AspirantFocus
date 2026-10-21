@@ -11,8 +11,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
-    entities = [FocusSession::class, ExamEntity::class, Subject::class, Topic::class, AppBlockRule::class],
-    version = 2,
+    entities = [
+        FocusSession::class,
+        ExamEntity::class,
+        Subject::class,
+        Topic::class,
+        AppBlockRule::class,
+        RevisionItem::class,
+        ParkingLotItem::class
+    ],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

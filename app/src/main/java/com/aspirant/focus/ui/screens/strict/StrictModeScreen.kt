@@ -175,6 +175,194 @@ fun StrictModeScreen() {
             }
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Curfew & Bedtime Guard
+        var curfewEnabled by remember { mutableStateOf(prefs.isCurfewEnabled) }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("🌙 Bedtime & Morning Curfew Guard", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Locks all feeds and distracting apps during sleep hours (11:00 PM – 06:30 AM) to kill night doomscrolling and morning procrastination.",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                    }
+                    Switch(
+                        checked = curfewEnabled,
+                        onCheckedChange = {
+                            curfewEnabled = it
+                            prefs.isCurfewEnabled = it
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PrimaryEmerald,
+                            checkedTrackColor = PrimaryEmerald.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Intention Breath Pause
+        var intentionPause by remember { mutableStateOf(prefs.isIntentionPauseEnabled) }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("🌿 Intention Pause (10-Second Breath)", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Forces a 10-second deep breath pause before opening distracting apps outside focus to break subconscious muscle memory.",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                }
+                Switch(
+                    checked = intentionPause,
+                    onCheckedChange = {
+                        intentionPause = it
+                        prefs.isIntentionPauseEnabled = it
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = AccentBlue,
+                        checkedTrackColor = AccentBlue.copy(alpha = 0.5f)
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Emergency MCQ Unlock Challenge
+        var emergencyMcq by remember { mutableStateOf(prefs.isEmergencyMcqEnabled) }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("🎯 Emergency Friction: MCQ Gate", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Attempting to quit strict sessions early requires solving tough exam MCQs correctly before early unlock is allowed.",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                }
+                Switch(
+                    checked = emergencyMcq,
+                    onCheckedChange = {
+                        emergencyMcq = it
+                        prefs.isEmergencyMcqEnabled = it
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = WarningAmber,
+                        checkedTrackColor = WarningAmber.copy(alpha = 0.5f)
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Accountability Partner Alert
+        var accountabilityEnabled by remember { mutableStateOf(prefs.isAccountabilityEnabled) }
+        var partnerName by remember { mutableStateOf(prefs.accountabilityName) }
+        var partnerPhone by remember { mutableStateOf(prefs.accountabilityPhone) }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("👥 Accountability Partner Alert", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Logs uninstallation or early exit attempts directly to a trusted study partner or parent.",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                    }
+                    Switch(
+                        checked = accountabilityEnabled,
+                        onCheckedChange = {
+                            accountabilityEnabled = it
+                            prefs.isAccountabilityEnabled = it
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PurpleAesthetic,
+                            checkedTrackColor = PurpleAesthetic.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+
+                if (accountabilityEnabled) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = partnerName,
+                        onValueChange = {
+                            partnerName = it
+                            prefs.accountabilityName = it
+                        },
+                        label = { Text("Partner's Name") },
+                        placeholder = { Text("e.g. Papa, Bhai, Study Partner") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = partnerPhone,
+                        onValueChange = {
+                            partnerPhone = it
+                            prefs.accountabilityPhone = it
+                        },
+                        label = { Text("Partner's Phone / Contact") },
+                        placeholder = { Text("+91 9876543210") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
         // Reboot Persistence Note

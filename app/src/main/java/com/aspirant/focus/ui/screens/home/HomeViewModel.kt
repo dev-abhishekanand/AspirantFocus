@@ -62,6 +62,44 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _todayPhoneMillis = MutableStateFlow(0L)
     val todayPhoneMillis: StateFlow<Long> = _todayPhoneMillis.asStateFlow()
 
+    val allTopics: StateFlow<List<Topic>> = repository.getAllTopics()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val parkingItems: StateFlow<List<com.aspirant.focus.data.model.ParkingLotItem>> = repository.getAllParkingItems()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val dueRevisions: StateFlow<List<com.aspirant.focus.data.model.RevisionItem>> = repository.getDueRevisions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _isGrayscaleEnabled = MutableStateFlow(prefs.isGrayscaleEnabled)
+    val isGrayscaleEnabled: StateFlow<Boolean> = _isGrayscaleEnabled.asStateFlow()
+
+    val targetExamDateMillis: Long get() = prefs.targetExamDateMillis
+
+    fun toggleGrayscale(enabled: Boolean) {
+        _isGrayscaleEnabled.value = enabled
+        prefs.isGrayscaleEnabled = enabled
+    }
+
+    fun parkThought(text: String) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            repository.parkThought(text.trim())
+        }
+    }
+
+    fun deleteParkingItem(item: com.aspirant.focus.data.model.ParkingLotItem) {
+        viewModelScope.launch {
+            repository.deleteParkingItem(item)
+        }
+    }
+
+    fun completeRevision(revision: com.aspirant.focus.data.model.RevisionItem) {
+        viewModelScope.launch {
+            repository.completeRevision(revision)
+        }
+    }
+
     init {
         refreshStats()
         viewModelScope.launch {
@@ -140,6 +178,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         FocusSessionService.stop(getApplication())
         refreshStats()
         return true
+    }
+
+    fun emergencyUnlock() {
+        prefs.isStrictModeActive = false
+        prefs.strictSessionEndTimeMillis = 0L
+        FocusAudioGenerator.instance.stop()
+        FocusSessionService.stop(getApplication())
+        refreshStats()
     }
 
     fun refreshStats() {

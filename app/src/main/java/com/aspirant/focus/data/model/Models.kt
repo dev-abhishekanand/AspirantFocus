@@ -68,3 +68,33 @@ enum class FocusAudioType(val displayName: String) {
     BINAURAL_ALPHA("Alpha Waves (Flow State - 10Hz)"),
     BINAURAL_BETA("Beta Waves (Intense Study - 20Hz)")
 }
+
+@Entity(tableName = "revisions")
+data class RevisionItem(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val topicId: Long,
+    val topicName: String,
+    val subjectName: String,
+    val stage: Int, // 1: Day 1, 2: Day 3, 3: Day 7, 4: Day 30
+    val scheduledDateMillis: Long,
+    val isCompleted: Boolean = false
+)
+
+@Entity(tableName = "parking_lot")
+data class ParkingLotItem(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val text: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val isReviewed: Boolean = false
+)
+
+data class MCQQuestion(
+    val id: Int,
+    val question: String,
+    val options: List<String>,
+    val correctIndex: Int,
+    val subject: String
+)
+

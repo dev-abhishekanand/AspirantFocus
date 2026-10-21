@@ -18,6 +18,24 @@ class AspirantAccessibilityService : AccessibilityService() {
     private var lastInterventionTime = 0L
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
     private var blockedAppPackages = setOf<String>()
+    private val approvedIntentionPackages = mutableMapOf<String, Long>()
+
+    private fun isCurfewActive(): Boolean {
+        if (!prefs.isCurfewEnabled) return false
+        val calendar = java.util.Calendar.getInstance()
+        val currentHour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+        val currentMinute = calendar.get(java.util.Calendar.MINUTE)
+        val currentTotalMin = currentHour * 60 + currentMinute
+
+        val startTotalMin = prefs.curfewStartHour * 60 + prefs.curfewStartMinute
+        val endTotalMin = prefs.curfewEndHour * 60 + prefs.curfewEndMinute
+
+        return if (startTotalMin > endTotalMin) {
+            currentTotalMin >= startTotalMin || currentTotalMin < endTotalMin
+        } else {
+            currentTotalMin in startTotalMin until endTotalMin
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -38,7 +56,21 @@ class AspirantAccessibilityService : AccessibilityService() {
         if (event == null) return
         val packageName = event.packageName?.toString() ?: return
 
-        // 0. Dynamic App Blocking (Blocks any app added to the blocker during focus)
+        // 0. Curfew Guard (Bedtime & Morning Lock)
+        if (isCurfewActive() &&
+            packageName != applicationContext.packageName &&
+            (blockedAppPackages.contains(packageName) || packageName == PKG_INSTAGRAM || packageName == PKG_YOUTUBE)
+        ) {
+            val curfewEndTime = String.format("%02d:%02d", prefs.curfewEndHour, prefs.curfewEndMinute)
+            throttleIntervention(
+                "🌙 Curfew Active",
+                "Sleep & morning momentum protected. Distracting apps are locked until $curfewEndTime."
+            )
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            return
+        }
+
+        // 0.1 Dynamic App Blocking (Blocks any app added to the blocker during focus)
         if (FocusSessionService.sessionState.value.isActive &&
             packageName != applicationContext.packageName &&
             blockedAppPackages.contains(packageName)
@@ -49,6 +81,35 @@ class AspirantAccessibilityService : AccessibilityService() {
             )
             performGlobalAction(GLOBAL_ACTION_HOME)
             return
+        }
+
+        // 0.2 Intention Pause (10s breath gate outside of focus mode)
+        if (!FocusSessionService.sessionState.value.isActive &&
+            prefs.isIntentionPauseEnabled &&
+            packageName != applicationContext.packageName &&
+            (blockedAppPackages.contains(packageName) || packageName == PKG_INSTAGRAM || packageName == PKG_YOUTUBE)
+        ) {
+            val lastApproved = approvedIntentionPackages[packageName] ?: 0L
+            if (System.currentTimeMillis() - lastApproved > 5 * 60 * 1000) {
+                val now = System.currentTimeMillis()
+                if (now - lastInterventionTime > 3000) {
+                    lastInterventionTime = now
+                    val appName = when (packageName) {
+                        PKG_INSTAGRAM -> "Instagram"
+                        PKG_YOUTUBE -> "YouTube"
+                        else -> "Distracting App"
+                    }
+                    overlayManager.showIntentionPause(
+                        appName = appName,
+                        onProceed = {
+                            approvedIntentionPackages[packageName] = System.currentTimeMillis()
+                        },
+                        onCancel = {
+                            performGlobalAction(GLOBAL_ACTION_HOME)
+                        }
+                    )
+                }
+            }
         }
 
         // 1. Strict Mode & Anti-Uninstall Lockout Check

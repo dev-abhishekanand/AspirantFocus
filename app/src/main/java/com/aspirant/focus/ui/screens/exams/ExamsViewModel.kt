@@ -88,10 +88,23 @@ class ExamsViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    val dueRevisions: StateFlow<List<com.aspirant.focus.data.model.RevisionItem>> = repository.getDueRevisions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun toggleTopicCompleted(topic: Topic) {
         viewModelScope.launch {
-            repository.updateTopic(topic.copy(isCompleted = !topic.isCompleted))
+            val willBeCompleted = !topic.isCompleted
+            repository.updateTopic(topic.copy(isCompleted = willBeCompleted))
+            if (willBeCompleted) {
+                repository.scheduleRevisionsForTopic(topic)
+            }
             loadTopicsForSubject(topic.subjectName)
+        }
+    }
+
+    fun completeRevision(revision: com.aspirant.focus.data.model.RevisionItem) {
+        viewModelScope.launch {
+            repository.completeRevision(revision)
         }
     }
 
