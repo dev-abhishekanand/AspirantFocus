@@ -170,6 +170,11 @@ class AspirantAccessibilityService : AccessibilityService() {
         if (prefs.isWebsiteBlockerEnabled && isBrowserPackage(packageName)) {
             checkBrowserSecurityAndContent(packageName)
         }
+
+        // 5. Telegram Adult Channel & Content Filtering
+        if (prefs.isWebsiteBlockerEnabled && isTelegramPackage(packageName)) {
+            checkTelegramAdultContent()
+        }
     }
 
     override fun onInterrupt() {}
@@ -354,6 +359,37 @@ class AspirantAccessibilityService : AccessibilityService() {
         return lower.contains("browser") || lower.contains("chrome") || lower.contains("firefox") || lower.contains("opera")
     }
 
+    private fun isTelegramPackage(packageName: String): Boolean {
+        return TELEGRAM_PACKAGES.contains(packageName) || packageName.lowercase().contains("telegram")
+    }
+
+    private fun checkTelegramAdultContent() {
+        val root = rootInActiveWindow ?: return
+
+        val isAdultDetected = containsNodeMatching(root) { node ->
+            val text = node.text?.toString()?.lowercase() ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+
+            ADULT_KEYWORDS_AND_DOMAINS.any { keyword ->
+                text.split(" ", "/", ".", "-", "?", "&", "=", "_", "@").any { word ->
+                    word == keyword || (keyword.length >= 4 && word.contains(keyword))
+                } || desc.split(" ", "/", ".", "-", "?", "&", "=", "_", "@").any { word ->
+                    word == keyword || (keyword.length >= 4 && word.contains(keyword))
+                }
+            }
+        }
+
+        if (isAdultDetected) {
+            val title = "🛑 Adult Content Blocked"
+            val msg = "Adult channels, groups, and explicit content in Telegram are strictly blocked."
+            ActiveBlockNotice.show(title, msg, "ADULT_CONTENT")
+            reForegroundAspirantFocus("ADULT_CONTENT")
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            throttleIntervention(title, msg, isStrict = true)
+        }
+    }
+
     // --- Node Helpers ---
     private fun containsNodeMatching(
         node: AccessibilityNodeInfo,
@@ -417,7 +453,20 @@ class AspirantAccessibilityService : AccessibilityService() {
             "in.startv.hotstar",
             "tv.twitch.android.app",
             "com.pinterest",
-            "com.discord"
+            "com.discord",
+            "org.telegram.messenger",
+            "org.telegram.messenger.web",
+            "org.telegram.plus",
+            "org.telegram.BETA",
+            "org.thunderdog.challegram"
+        )
+
+        val TELEGRAM_PACKAGES = setOf(
+            "org.telegram.messenger",
+            "org.telegram.messenger.web",
+            "org.telegram.plus",
+            "org.telegram.BETA",
+            "org.thunderdog.challegram"
         )
 
         val INSTALLER_PACKAGES = setOf(
