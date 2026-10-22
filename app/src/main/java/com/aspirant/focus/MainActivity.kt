@@ -214,7 +214,7 @@ fun MainAppNavHost() {
     blockNotice?.let { notice ->
         Dialog(
             onDismissRequest = { ActiveBlockNotice.dismiss() },
-            properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = false)
+            properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
         ) {
             Card(
                 modifier = Modifier

@@ -26,45 +26,10 @@ class InterventionOverlayManager(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
 
     fun showIntervention(title: String, message: String, isStrictLockout: Boolean = false) {
-        handler.post {
-            if (overlayView != null) {
-                // Already showing, just update text
-                overlayView?.findViewById<TextView>(ID_TITLE)?.text = title
-                overlayView?.findViewById<TextView>(ID_MSG)?.text = message
-                return@post
-            }
-
-            try {
-                val view = createOverlayView(title, message, isStrictLockout)
-                val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                    else
-                        @Suppress("DEPRECATION")
-                        WindowManager.LayoutParams.TYPE_PHONE,
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    PixelFormat.TRANSLUCENT
-                ).apply {
-                    gravity = Gravity.CENTER
-                }
-
-                windowManager.addView(view, params)
-                overlayView = view
-
-                // Auto-dismiss after 6 seconds if not in strict lockout
-                if (!isStrictLockout) {
-                    handler.postDelayed({
-                        dismissIntervention()
-                    }, 6000)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        // Disabled: Full-screen TYPE_APPLICATION_OVERLAY windows capture OS touches,
+        // prevent navigation, and cause device freeze traps.
+        // In-app Jetpack Compose ActiveBlockNotice and reForegroundAspirantFocus provide safe blocking.
+        dismissIntervention()
     }
 
     fun dismissIntervention() {

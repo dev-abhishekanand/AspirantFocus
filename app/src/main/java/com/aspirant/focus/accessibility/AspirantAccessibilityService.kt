@@ -62,6 +62,15 @@ class AspirantAccessibilityService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
 
         try {
+            // Check & Auto-clear expired strict mode
+            if (prefs.isStrictModeActive) {
+                val now = System.currentTimeMillis()
+                val isSessionActive = FocusSessionService.sessionState.value.isActive
+                if (!isSessionActive && (prefs.strictSessionEndTimeMillis == 0L || now >= prefs.strictSessionEndTimeMillis)) {
+                    prefs.isStrictModeActive = false
+                }
+            }
+
             // 0. Curfew Guard (Bedtime & Morning Lock)
             // Hard-locks all social media, entertainment, distracting apps, and user-blocked apps
             if (isCurfewActive() &&
@@ -80,7 +89,6 @@ class AspirantAccessibilityService : AccessibilityService() {
                 ActiveBlockNotice.show(title, msg, "CURFEW")
                 reForegroundAspirantFocus("CURFEW")
                 performGlobalAction(GLOBAL_ACTION_HOME)
-                throttleIntervention(title, msg, isStrict = true)
                 return
             }
 
@@ -103,7 +111,6 @@ class AspirantAccessibilityService : AccessibilityService() {
                         reForegroundAspirantFocus("CURFEW")
                         performGlobalAction(GLOBAL_ACTION_HOME)
                         performGlobalAction(GLOBAL_ACTION_BACK)
-                        throttleIntervention(title, msg, isStrict = true)
                         return
                     }
                 }
@@ -123,7 +130,6 @@ class AspirantAccessibilityService : AccessibilityService() {
                 ActiveBlockNotice.show(title, msg, "STRICT_KIOSK")
                 reForegroundAspirantFocus("STRICT_KIOSK")
                 performGlobalAction(GLOBAL_ACTION_HOME)
-                throttleIntervention(title, msg, isStrict = true)
                 return
             }
         }
@@ -139,7 +145,6 @@ class AspirantAccessibilityService : AccessibilityService() {
             ActiveBlockNotice.show(title, msg, "APP_BLOCKED")
             reForegroundAspirantFocus("APP_BLOCKED")
             performGlobalAction(GLOBAL_ACTION_HOME)
-            throttleIntervention(title, msg)
             return
         }
 
@@ -148,7 +153,7 @@ class AspirantAccessibilityService : AccessibilityService() {
             !isCurfewActive() &&
             prefs.isIntentionPauseEnabled &&
             packageName != applicationContext.packageName &&
-            (blockedAppPackages.contains(packageName) || packageName == PKG_INSTAGRAM || packageName == PKG_YOUTUBE)
+            blockedAppPackages.contains(packageName)
         ) {
             val lastApproved = approvedIntentionPackages[packageName] ?: 0L
             if (System.currentTimeMillis() - lastApproved > 5 * 60 * 1000) {
@@ -211,7 +216,6 @@ class AspirantAccessibilityService : AccessibilityService() {
             reForegroundAspirantFocus("VPN_BLOCKED")
             performGlobalAction(GLOBAL_ACTION_HOME)
             performGlobalAction(GLOBAL_ACTION_BACK)
-            throttleIntervention(title, msg, isStrict = true)
             return
         }
 
@@ -257,7 +261,6 @@ class AspirantAccessibilityService : AccessibilityService() {
                 ActiveBlockNotice.show("Uninstall Blocked!", "Strict Mode is active. Complete your study session first!", "STRICT_PROTECTION")
                 reForegroundAspirantFocus("STRICT_PROTECTION")
                 performGlobalAction(GLOBAL_ACTION_HOME)
-                throttleIntervention("Uninstall Blocked!", "Strict Mode is active. Complete your study session first!", isStrict = true)
                 return
             }
         }
@@ -272,7 +275,6 @@ class AspirantAccessibilityService : AccessibilityService() {
                 ActiveBlockNotice.show("Settings Locked!", "Settings are locked during Strict Mode focus session.", "SETTINGS_LOCKED")
                 reForegroundAspirantFocus("SETTINGS_LOCKED")
                 performGlobalAction(GLOBAL_ACTION_HOME)
-                throttleIntervention("Settings Locked!", "Settings are locked during Strict Mode focus session.", isStrict = true)
                 return
             }
         }
@@ -289,16 +291,20 @@ class AspirantAccessibilityService : AccessibilityService() {
 
             id.contains("reel_viewer") ||
             id.contains("clips_video_container") ||
-            id.contains("reels_tab") ||
-            (desc.contains("reel by") || desc.contains("reels tab") || text == "reels")
+            (id.contains("reels_tab") && node.isSelected) ||
+            desc.contains("reel by") ||
+            (text == "reels" && node.isSelected)
         }
 
         if (isReelsViewing) {
-            throttleIntervention(
-                "Instagram Reels Blocked!",
-                "15-second loops destroy your attention span. Focus on your goals."
-            )
             performGlobalAction(GLOBAL_ACTION_BACK)
+            handler.post {
+                android.widget.Toast.makeText(
+                    applicationContext,
+                    "🎯 Reels blocked. Focus on your goals!",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
@@ -308,22 +314,23 @@ class AspirantAccessibilityService : AccessibilityService() {
 
         val isShorts = containsNodeMatching(root) { node ->
             val id = node.viewIdResourceName?.lowercase() ?: ""
-            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-            val text = node.text?.toString()?.lowercase() ?: ""
-
             id.contains("shorts_player") ||
             id.contains("reel_recycler") ||
-            id.contains("pivot_bar_shorts") ||
-            desc.contains("shorts") ||
-            text.equals("shorts", ignoreCase = true)
+            id.contains("shorts_video_player") ||
+            id.contains("shorts_container") ||
+            id.contains("reel_watch_fragment") ||
+            (id.contains("pivot_bar_shorts") && node.isSelected)
         }
 
         if (isShorts) {
-            throttleIntervention(
-                "YouTube Shorts Blocked!",
-                "Keep YouTube strictly for lectures, not endless short-form loops."
-            )
             performGlobalAction(GLOBAL_ACTION_BACK)
+            handler.post {
+                android.widget.Toast.makeText(
+                    applicationContext,
+                    "🎯 Shorts blocked. Stick to educational videos!",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
@@ -338,18 +345,19 @@ class AspirantAccessibilityService : AccessibilityService() {
         }
 
         if (isHomeFeed) {
-            throttleIntervention(
-                "YouTube Study Mode Active",
-                "Search only for educational lectures. Homepage recommendations are disabled."
-            )
+            handler.post {
+                android.widget.Toast.makeText(
+                    applicationContext,
+                    "YouTube Study Mode: Search directly for lectures",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
     // --- Browser Security & Adult Content Filtering ---
     private fun checkBrowserSecurityAndContent(packageName: String) {
         val root = rootInActiveWindow ?: return
-
-        val isBrave = packageName.contains("brave", ignoreCase = true)
 
         // 1. Incognito & Private Tab Destroyer (24/7 Zero Loophole)
         // Eliminates Incognito/Private tabs across Brave, Chrome, Firefox, Samsung, Edge, Opera, etc.
@@ -358,41 +366,43 @@ class AspirantAccessibilityService : AccessibilityService() {
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
             val id = node.viewIdResourceName?.lowercase() ?: ""
 
-            // Universal Incognito / Private indicators
-            text.contains("incognito") || desc.contains("incognito") || id.contains("incognito") ||
-            text.contains("secret mode") || desc.contains("secret mode") || id.contains("secret_mode") ||
-            text.contains("inprivate") || desc.contains("inprivate") || id.contains("inprivate") ||
+            // Strict Multi-word Private / Incognito phrases ONLY (Zero false positives on normal words like "history", "tutorial", "doctor")
+            text.contains("new incognito tab") || desc.contains("new incognito tab") ||
+            text.contains("close incognito tab") || desc.contains("close incognito tab") ||
+            text.contains("incognito tab") || desc.contains("incognito tab") ||
+            text.contains("incognito mode") || desc.contains("incognito mode") ||
+            text.contains("gone incognito") || desc.contains("gone incognito") ||
+            id.contains("incognito_icon") || id.contains("incognito_splash") ||
+
+            text.contains("new private tab") || desc.contains("new private tab") ||
+            text.contains("close private tab") || desc.contains("close private tab") ||
             text.contains("private tab") || desc.contains("private tab") ||
             text.contains("private tabs") || desc.contains("private tabs") ||
-            text.contains("new private tab") || desc.contains("new private tab") ||
-            text.contains("close private tab") || desc.contains("close private tabs") ||
             text.contains("private mode") || desc.contains("private mode") ||
             text.contains("private browsing") || desc.contains("private browsing") ||
+            text.contains("switch to private") || desc.contains("switch to private") ||
+
             text.contains("private with tor") || desc.contains("private with tor") ||
-            text.contains("tor tab") || desc.contains("tor tab") ||
             text.contains("new tor tab") || desc.contains("new tor tab") ||
-            desc.contains("switch to private") || text.contains("switch to private") ||
-            desc.contains("new incognito tab") || text.contains("close incognito tabs") ||
-            id.contains("tab_switcher_mode_switch_tabs_button") ||
-            id.contains("tab_switcher_private_tabs_button") ||
-            id.contains("private_tab") || id.contains("tor_tab") ||
+            text.contains("close tor tab") || desc.contains("close tor tab") ||
+            text.contains("tor tab") || desc.contains("tor tab") ||
+
+            text.contains("secret mode") || desc.contains("secret mode") ||
+            text.contains("inprivate tab") || desc.contains("inprivate tab") ||
+            text.contains("inprivate browsing") || desc.contains("inprivate browsing") ||
+
+            (id.contains("tab_switcher_private_tabs_button") && node.isSelected) ||
             id.contains("new_tab_menu_private") ||
-            (isBrave && (
-                text == "private" || desc == "private" ||
-                desc.contains("private") ||
-                id.contains("private") ||
-                text.contains("tor") || desc.contains("tor") || id.contains("tor")
-            ))
+            id.endsWith(":id/incognito_tab")
         }
 
         if (isIncognito) {
-            val title = "🔒 Private Browsing Destroyed"
+            val title = "🔒 Private Browsing Blocked"
             val msg = "Private & Incognito browsing is strictly disabled 24/7 to prevent adult content loopholes."
             ActiveBlockNotice.show(title, msg, "INCOGNITO")
             reForegroundAspirantFocus("INCOGNITO")
             performGlobalAction(GLOBAL_ACTION_HOME)
             performGlobalAction(GLOBAL_ACTION_BACK)
-            throttleIntervention(title, msg, isStrict = true)
             return
         }
 
@@ -422,7 +432,6 @@ class AspirantAccessibilityService : AccessibilityService() {
             reForegroundAspirantFocus("ADULT_CONTENT")
             performGlobalAction(GLOBAL_ACTION_HOME)
             performGlobalAction(GLOBAL_ACTION_BACK)
-            throttleIntervention(title, msg, isStrict = true)
         }
     }
 
@@ -464,7 +473,6 @@ class AspirantAccessibilityService : AccessibilityService() {
             reForegroundAspirantFocus("ADULT_CONTENT")
             performGlobalAction(GLOBAL_ACTION_HOME)
             performGlobalAction(GLOBAL_ACTION_BACK)
-            throttleIntervention(title, msg, isStrict = true)
         }
     }
 
@@ -499,7 +507,6 @@ class AspirantAccessibilityService : AccessibilityService() {
             reForegroundAspirantFocus("PLAY_STORE_RESTRICTED")
             performGlobalAction(GLOBAL_ACTION_HOME)
             performGlobalAction(GLOBAL_ACTION_BACK)
-            throttleIntervention(title, msg, isStrict = true)
         }
     }
 
@@ -542,7 +549,6 @@ class AspirantAccessibilityService : AccessibilityService() {
             reForegroundAspirantFocus("ADULT_CONTENT")
             performGlobalAction(GLOBAL_ACTION_HOME)
             performGlobalAction(GLOBAL_ACTION_BACK)
-            throttleIntervention(title, msg, isStrict = true)
         }
     }
 
@@ -581,11 +587,7 @@ class AspirantAccessibilityService : AccessibilityService() {
     }
 
     private fun throttleIntervention(title: String, msg: String, isStrict: Boolean = false) {
-        val now = System.currentTimeMillis()
-        if (now - lastInterventionTime > 1500) {
-            lastInterventionTime = now
-            overlayManager.showIntervention(title, msg, isStrictLockout = isStrict)
-        }
+        // Disabled: No window overlays to prevent freeze traps.
     }
 
     companion object {
@@ -721,9 +723,11 @@ class AspirantAccessibilityService : AccessibilityService() {
             "fapello", "faphero", "coomer", "kemono", "javhd", "javlibrary",
             "missav", "jable", "avgle", "spankwire", "heavy-r", "kaotic",
 
-            // Indian & Regional Explicit Search Terms
+            // Indian & Regional Explicit Search Terms & Domains
             "desiporn", "desisex", "indianporn", "bhabhiporn", "malluporn", "auntyporn",
             "choot", "antichut", "fulldesi", "savita bhabhi", "desi mms", "desi leak",
+            "antarvasna", "sex stories", "indian sex", "desi sex", "sex story",
+            "kamababa", "chudai", "sex video", "sexy video",
 
             // Explicit Adult Roots (Cannot appear inside standard educational words)
             "porn", "xxx", "nsfw", "camgirl", "camgirls", "blowjob", "creampie",
@@ -734,8 +738,8 @@ class AspirantAccessibilityService : AccessibilityService() {
 
         // 2. Delimited Adult & Gambling Keywords (Checked with word-boundary splitting to avoid false positives)
         val DELIMITED_ADULT_KEYWORDS = listOf(
-            "anal", "boobs", "pussy", "milf", "escort", "escorts", "fap",
-            "bdsm", "incest", "leaks", "leak", "mms", "scandal", "bhabhi",
+            "sex", "sexy", "anal", "boobs", "pussy", "milf", "escort", "escorts", "fap",
+            "bdsm", "incest", "leaks", "leak", "mms", "scandal", "bhabhi", "chudai",
             // Gambling & Betting
             "bet365", "1xbet", "stake.com", "parimatch", "betway", "dafabet",
             "melbet", "22bet", "casino", "roulette", "blackjack", "gambling"
@@ -744,13 +748,14 @@ class AspirantAccessibilityService : AccessibilityService() {
         // 3. Telegram-Specific Unambiguous Adult Channel & Content Identifiers
         val TELEGRAM_UNAMBIGUOUS_KEYWORDS = UNAMBIGUOUS_ADULT_KEYWORDS + listOf(
             "adultchannel", "adultgroup", "terabox 18+", "mega 18+", "mega leak",
-            "sex video", "hot video", "sexy video", "viral mms", "desiporn", "desi mms"
+            "sex video", "hot video", "sexy video", "viral mms", "desiporn", "desi mms",
+            "sex stories", "indian sex", "desi sex"
         )
 
         // 4. Telegram-Specific Delimited Identifiers (Tags, Channel Names, Searches)
         val TELEGRAM_DELIMITED_KEYWORDS = listOf(
-            "18+", "+18", "nsfw", "mms", "leak", "leaks", "bhabhi", "scandal",
-            "anal", "boobs", "pussy", "milf", "escort", "fap", "bdsm", "choot", "nude", "nudes"
+            "18+", "+18", "nsfw", "mms", "leak", "leaks", "bhabhi", "scandal", "sex", "sexy",
+            "anal", "boobs", "pussy", "milf", "escort", "fap", "bdsm", "choot", "nude", "nudes", "chudai"
         )
 
         val WHITELISTED_STUDY_TOOLS = setOf(
