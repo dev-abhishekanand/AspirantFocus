@@ -62,6 +62,11 @@ class AspirantAccessibilityService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
 
         try {
+            // Instant Exemption for Banking, UPI, and Financial Apps (Zero data inspection, zero overhead)
+            if (BANKING_AND_UPI_PACKAGES.contains(packageName) || isFinancialApp(packageName)) {
+                return
+            }
+
             // Check & Auto-clear expired strict mode
             if (prefs.isStrictModeActive) {
                 val now = System.currentTimeMillis()
@@ -772,5 +777,32 @@ class AspirantAccessibilityService : AccessibilityService() {
             "org.anki4android",
             "com.notion.id"
         )
+
+        val BANKING_AND_UPI_PACKAGES = setOf(
+            "com.google.android.apps.nbu.paisa.user", // Google Pay (GPay)
+            "com.phonepe.app",                        // PhonePe
+            "net.one97.paytm",                        // Paytm
+            "in.org.npci.upiapp",                     // BHIM UPI
+            "com.dreamplug.androidapp",               // CRED
+            "com.csam.icici.bank.imobile",            // ICICI iMobile
+            "com.msf.kbank.mobile",                   // Kotak Mahindra Bank
+            "com.axis.mobile",                        // Axis Mobile
+            "com.sbi.lotusintouch",                   // YONO SBI
+            "com.hdfcbank.android",                   // HDFC MobileBanking
+            "com.freecharge.android",                 // Freecharge
+            "com.mobikwik_new",                       // MobiKwik
+            "com.fampay.in",                          // FamPay
+            "com.slicepay",                           // Slice
+            "com.jupiter.money",                      // Jupiter
+            "money.fi.app",                           // Fi Money
+            "in.niyo.bharat",                         // Niyo
+            "com.paytmmall",                          // Paytm Mall
+            "in.gov.uidai.mAadhaarPlus"               // mAadhaar
+        )
+
+        fun isFinancialApp(packageName: String): Boolean {
+            val lower = packageName.lowercase()
+            return lower.contains("upi") || lower.contains(".bank") || lower.contains("paytm") || lower.contains("phonepe")
+        }
     }
 }
